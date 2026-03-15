@@ -1,0 +1,6 @@
+DB-Flow for QITE
+
+V1503: 
+- Energy and Infidelity for simple one-qubit Hamiltonian for different step sizes
+- Optimization loop. Scan different step sizes and extract number of steps needed to reach target infidelity
+

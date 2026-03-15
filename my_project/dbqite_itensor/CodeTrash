@@ -1,37 +1,3 @@
-// DB-QITE recursion: U_{k+1} = A * U * R0 * U' * A' * U
-            ITensor Ui = composeGate(A, U, s);
-            Ui = canonicalOp(Ui, s);
-            //ITensor UUd = composeGate(Ui, adjointGate(Ui,s));
-            //cout  << norm(UUd - I) << "\t";
-            cout << "U: " << unitaryDefectDense(Ui,s) << "\t";
-
-            Ui = composeGate(Ui, R0,s);
-            Ui = canonicalOp(Ui, s);
-            //UUd = composeGate(Ui, adjointGate(Ui,s), s);
-            //cout  << norm(UUd - I) << "\t";
-            cout << "U: " << unitaryDefectDense(Ui,s) << "\t";
-
-            Ui = composeGate(Ui, Ud,s);
-            Ui = canonicalOp(Ui, s);
-            //UUd = composeGate(Ui, adjointGate(Ui,s), s);
-            //cout  << norm(UUd - I) << "\t";
-            cout << "U: " << unitaryDefectDense(Ui,s) << "\t";
-
-            Ui = composeGate(Ui, Ad,s);
-            Ui = canonicalOp(Ui, s);
-            //UUd = composeGate(Ui, adjointGate(Ui,s), s);
-            //cout  << norm(UUd - I) << "\t";
-            cout << "U: " << unitaryDefectDense(Ui,s) << "\t";
-
-            Ui = composeGate(Ui, U,s);
-            Ui = canonicalOp(Ui, s);
-
-            cout << "U not: " << unitaryDefectDense(Ui,s) << "\t";
-            //UUd = composeGate(Ui, adjointGate(Ui,s), s);
-            //cout  << norm(UUd - I) << "\n";
-            cout << "U proj: " << unitaryDefectDense(Ui,s) << "\n";
-
-
 
             for(auto const& I : inds(Ui)){
                             cout << I << " Ui prime=" << primeLevel(I)

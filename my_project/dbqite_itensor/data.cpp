@@ -60,7 +60,7 @@ int plot_with_python(const string& csv_file,
     const string plot_dir ="./Plots/";
 
     string cmd =
-        q(py_exec) + " " + q(script) + " " << mode << " " + q(plot_dir + out_png) + " " + q(data_dir + csv_file);
+        q(py_exec) + " " + q(script) + " " + mode + " " + q(plot_dir + out_png) + " " + q(data_dir + csv_file);
 
     cout << "\n[plot] Running: " << cmd << "\n";
     int rc = system(cmd.c_str());

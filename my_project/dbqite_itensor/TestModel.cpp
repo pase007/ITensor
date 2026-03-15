@@ -188,9 +188,3 @@ void TestModel::basicModelLoop(const AlgoLoopParams& params) const {
     write_csv("data.csv", rows);
     //write_csv("data" + s_string + ".csv", rows);
 }
-
-
-//void TestModel::optimizeSteps const(){
-
-
-//}

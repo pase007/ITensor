@@ -5,22 +5,10 @@
 #ifndef MY_PROJECT_DATA_H
 #define MY_PROJECT_DATA_H
 #pragma once
+#include "StructFile.h"
 #include <string>
 #include <vector>
 using namespace std;
-
-struct Row{
-    int k;
-    double energy;
-    double fidelity;
-};
-
-struct RowOpt {
-    double s_step;
-    int k;
-    double infidelity;
-};
-
 
 // Write CSV with header: k,Energy,Fidelity
 void write_csv(const string& filename, const vector<Row>& rows);

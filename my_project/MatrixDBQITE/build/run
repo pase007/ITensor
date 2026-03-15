@@ -1,0 +1,5 @@
+#!/bin/bash
+
+cmake --build . -j
+./dbqite
+python3 plot_matrix.py matrix_data.csv

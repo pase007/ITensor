@@ -1,0 +1,11 @@
+#!/bin/bash
+# chmod +x run
+make -j
+if [ $? -ne 0 ]; then
+  echo "Build failed"
+  exit 1
+fi
+
+echo "Running..."
+./dbqite_itensor
+#python3 plot.py data.csv plot.png

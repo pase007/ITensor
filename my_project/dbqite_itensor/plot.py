@@ -176,9 +176,32 @@ def plot_optimization(out_png, csv_files):
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)
 
+def plot_infidelity_trace(out_png, csv_files):
+    plt.figure()
+
+    for csv_path in csv_files:
+        data = np.loadtxt(csv_path, delimiter=",", skiprows=1)
+        e = data[:,0]
+        k = data[:,1]
+
+        s = extract_data_full(csv_path)
+        label = f"s={s}"
+        plt.plot(e, k, marker="o", label=label, markersize=2.0)
+
+    plt.ylabel("Number of steps k")
+    plt.title("#Steps to reach infidelity target for s")
+    plt.xlabel("Infidelity target epsilon")
+    plt.xscale("log")
+    plt.yticks(np.arange(min(k), max(k), 2))
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=200)
+
 # ------------------- Available Plot functions and command dict -----------------------
 commands = {
     "single": plot_single_curves,
+    "infid_trace": plot_infidelity_trace,
     "multi": plot_multiple_fids,
     "opti": plot_optimization
 }
@@ -193,6 +216,9 @@ def main():
 
     elif command == "opti":
         plot_optimization(sys.argv[2], sys.argv[3:])
+
+    elif command == "infid_trace":
+        plot_infidelity_trace(sys.argv[2], sys.argv[3:])
 
     else:
         print("Unknown command")

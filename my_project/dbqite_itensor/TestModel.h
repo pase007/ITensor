@@ -46,5 +46,6 @@ public:
     void printSummary() const;
     void basicModelLoop(const AlgoLoopParams& params) const;
     void optimizeStepsLoop(const AlgoOptParams& params) const;
+    void degradingInfidLoop(const AlgoInfidParams& params) const;
 };
 #endif //MY_PROJECT_TESTMODEL_H

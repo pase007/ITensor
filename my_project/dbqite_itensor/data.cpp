@@ -39,11 +39,25 @@ void write_csv_opt(const string& filename, const vector<RowOpt>& rows) {
     }
 }
 
+// Save function for epsilon loop
+void write_csv_eps(const string& filename, const vector<RowInfid>& rows) {
+    const string data_dir = "./Data/";
+    ofstream out(data_dir + filename);
+    if(!out) {
+        throw runtime_error("Could not open file for writing: " + filename);
+    }
+    out << "eps,k,Infidelity\n";
+    out << setprecision(14);
+    for(const auto& r : rows) {
+        out << r.infid_step << "," << r.k << "," << r.infidelity << "\n";
+    }
+}
+
 
 // ---------------------------------------------------------------------------
 // --------------------------- Python Plot Handling --------------------------
 // Plot energy and fidelity for single data file
-int plot_with_python(const string& csv_file,
+int plot_with_python_S(const string& csv_file,
                      const string& out_png,
                      const string& py_exec,
                      const string& script,

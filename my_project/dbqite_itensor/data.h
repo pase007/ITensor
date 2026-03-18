@@ -13,9 +13,10 @@ using namespace std;
 // Write CSV with header: k,Energy,Fidelity
 void write_csv(const string& filename, const vector<Row>& rows);
 void write_csv_opt(const string& filename, const vector<RowOpt>& rows);
+void write_csv_eps(const string& filename, const vector<RowInfid>& rows);
 
 // Run python plotter (default: python3 plot.py data.csv plot.png)
-int plot_with_python(const string& csv_file,
+int plot_with_python_S(const string& csv_file,
                      const string& out_png = "plot.png",
                      const string& py_exec = "python3",
                      const string& script  = "plot.py",

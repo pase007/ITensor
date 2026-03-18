@@ -63,17 +63,7 @@ ITensor exp_i_theta_H(ITensor const& H, double theta){
     return A;
 }
 
-ITensor removeTrivial(ITensor T)
-{
-    for(auto const& I : inds(T))
-    {
-        if(dim(I) == 1)
-        {
-            T = T * delta(I);
-        }
-    }
-    return T;
-}
+
 // ---------------------------------
 // ---  Build Itensor Operations ---
 // ---------------------------------

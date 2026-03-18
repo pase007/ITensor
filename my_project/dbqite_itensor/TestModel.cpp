@@ -43,6 +43,87 @@ void TestModel::printSummary() const{
     cout << "phi = " << phi_ << "\n";
     cout << "ket0 = " << ket0_ << "\n";
 }
+
+void TestModel::degradingInfidLoop(const AlgoInfidParams& params) const {
+    const double s_step = params.s_step;
+    const string s_string = params.s_string;
+    double theta = sqrt(s_step);
+    const int K_max = params.K_max;
+    const double infid_min = params.infid_min;
+    const int infid_N = params.infid_N;
+
+
+    // Data Container
+    vector<RowInfid> rows;
+    rows.reserve(infid_N+1);
+    double Fk, IFk;
+    cout << "current infid\tsteps k" << endl;
+
+    // Contruct Unitaries A and R
+    ITensor A  = exp_i_theta_H(H_, theta);
+    ITensor Ad = adjointGate(A);
+    ITensor R0 = phaseOnState(ket0_, s_, theta);
+
+    for (int ek = 0; ek < infid_N; ek++) {
+        double infid_step;
+        if (ek % 2 == 0) {
+            infid_step = infid_min * pow(10.0, -ek);
+        } else {
+            infid_step = infid_min * pow(10.0, -ek);
+        }
+        cout << infid_step << "\t";
+
+        // Start U0 = I
+        ITensor U = idGate(s_);
+        ITensor I = idGate(s_);
+
+        for(int k = 0; k <= K_max; k++) {
+            ITensor psi = applyGate(U, ket0_);
+
+            // Calculate Observables and save them
+            Fk = fidelity(psi, phi_);
+            IFk = 1 - Fk;
+
+            if (IFk > infid_step) {
+                if (k<K_max) {
+                    // DB-QITE recursion: U_{k+1} = A * U * Rk * U' * A' * U
+                    ITensor Ud = adjointGate(U);
+                    ITensor Ui = U;
+
+                    Ui = composeGate(A, U, s_);
+                    Ui = composeGate(Ui, R0, s_);
+                    Ui = composeGate(Ui, Ud,s_);
+                    Ui = composeGate(Ui, Ad,s_);
+                    //cout << "-U: " << unitary_Defect(Ui,s_) << "\t";
+                    Ui = composeGate(Ui, U,s_);
+
+                    //Next step
+                    if (unitary_Defect(Ui, s_) > 1E-12) {
+                        //cout << endl;
+                        //cout << "U: " << unitary_Defect(Ui,s_);
+                        //cout << " -- start Unitarization -- ";
+                        Ui = reunitarize_polar_gate(Ui, s_);
+                        cout << k << "Unitarization complete -- ";
+                        //cout << "U: " << unitary_Defect(Ui,s_) << "\n";
+                        U = Ui;
+                    }else{
+                        U = Ui;
+                        //cout << endl;
+                    }
+                }else if (k == K_max) {
+                    cout << k << endl;
+                    rows.push_back(RowInfid{infid_step, k, IFk});
+                }
+            }else{
+                cout << k << endl;
+                rows.push_back(RowInfid{infid_step, k, IFk});
+                break;
+            }
+        }
+    }
+    write_csv_eps("data" + s_string + "eps.csv", rows);
+}
+
 void TestModel::optimizeStepsLoop(const AlgoOptParams& params) const {
     const double s_min = params.s_min;
     const double s_bin = params.s_bin;

@@ -27,6 +27,14 @@ struct AlgoOptParams{
     string str_infid_target;
 };
 
+struct AlgoInfidParams{
+    double s_step;
+    string s_string;
+    int K_max;
+    double infid_min;
+    int infid_N;
+};
+
 
 // Data Containers
 struct Row{
@@ -41,7 +49,11 @@ struct RowOpt {
     double infidelity;
 };
 
-
+struct RowInfid {
+    double infid_step;
+    int k;
+    double infidelity;
+};
 
 
 

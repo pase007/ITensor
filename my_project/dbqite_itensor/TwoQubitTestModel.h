@@ -18,6 +18,7 @@
 using namespace std;
 using itensor::Index;
 using itensor::ITensor;
+using itensor::combiner;
 using cplx = complex<double>;
 
 
@@ -28,8 +29,13 @@ private:
 
     ITensor H_;
 
-    ITensor ket0_;
+    ITensor phi1_;
+    ITensor phi2_;
     ITensor phi_;
+
+    ITensor ket01_;
+    ITensor ket02_;
+    ITensor ket0_;
 
 public:
     TwoQubitTestModel(OneQubitOp op1, OneQubitOp op2);
@@ -40,13 +46,24 @@ public:
 
     const ITensor& H() const { return H_; }
 
+    ITensor const& phi1() const { return phi1_; }
+    ITensor const& phi2() const { return phi2_; }
     ITensor const& phi() const { return phi_; }
+
+    ITensor const& ket01() const { return ket01_; }
+    ITensor const& ket02() const { return ket02_; }
     ITensor const& ket0() const { return ket0_; }
 
     // Optional helper checks
     void buildHamiltonian(ITensor const& H1, ITensor const& H2);
     void checkHamiltonian() const;
+
     void printSummary() const;
+    void print_state() const;
+    void printAsMatrix(ITensor const& A) const;
+    void printAsVector(ITensor const& psi) const;
+
+
     void basicModelLoop(const AlgoLoopParams& params) const;
     void optimizeStepsLoop(const AlgoOptParams& params) const;
 };

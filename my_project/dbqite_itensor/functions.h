@@ -10,6 +10,7 @@
 #include <cmath>
 using itensor::prime;
 using itensor::noPrime;
+using itensor::swapPrime;
 using itensor::dag;
 using itensor::eltC;
 using itensor::ITensor;
@@ -27,23 +28,30 @@ ITensor opFromArray(Index const& s, cplx a00, cplx a01, cplx a10, cplx a11);
 
 // ---- Build ITensor for Gates ----
 ITensor idGate(Index const& s);
+ITensor idGateN(IndexSet const& sites);
 ITensor phaseOnZero(Index const& s, double theta);
 ITensor phaseOnState(ITensor const& psi_ref, Index const& s, double theta);
+ITensor phaseOnStateN(ITensor const& psi_ref, IndexSet const& svec, double theta);
 ITensor exp_i_theta_H(ITensor const& H, double theta);
 
-ITensor removeTrivial(ITensor T);
 // ---  Build Itensor Operations ---
 ITensor applyGate(ITensor const& G, ITensor psi);
 ITensor composeGate(ITensor V, ITensor U, Index const& s);
+ITensor composeGateN(ITensor L, ITensor R, IndexSet const& sites);
 ITensor adjointGate(ITensor const& U);
+ITensor adjointGateN(ITensor const& U);
+
 double unitary_Defect(ITensor const& U, Index const& s);
+double unitary_DefectN(ITensor const& U, IndexSet const& sites);
 ITensor projectorOnState(ITensor const& psi, Index const& s);
+ITensor projectorOnStateN(ITensor const& psi);
 ITensor canonGate(ITensor G, Index const& s);
+ITensor canonGateN(ITensor const& G, IndexSet const& sites);
 ITensor reunitarize_polar_gate(ITensor const& U, Index const& s, double eps = 1E-10);
 ITensor reunitarize_polar_svd(ITensor const& U, Index const& s);
 
 // --- Build functions for measuring Observables ---
-double expectation(ITensor const& psi, ITensor const& Op_sp_s, Index const& s);
+double expectation(ITensor const& psi, ITensor const& Op_sp_s);
 double fidelity(ITensor const& psi, ITensor const& phi);
 
 

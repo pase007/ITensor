@@ -43,7 +43,7 @@ def read_csv_Opt(path):
 
 
 # ----------------------------- Plot Data in different ways --------------
-def plot_single_curves(out_png, csv_path, mode="IF"):
+def plot_single_curves(out_png, csv_path, mode="F"):
     # Numerical data
     ks, E, F = read_csv(csv_path)
     If = []
@@ -74,7 +74,7 @@ def plot_single_curves(out_png, csv_path, mode="IF"):
         fid_y = F
         fid_theo = F_exact
     plt.plot(ks, fid_y, marker="o", label="DB-QITE (numerical)", markersize=2.5)
-    plt.plot(ks, fid_theo, linestyle="--", label="Analytic ITE", linewidth =1.5)
+    #plt.plot(ks, fid_theo, linestyle="--", label="Analytic ITE", linewidth =1.5)
     plt.xlabel("k")
     plt.grid(True)
     plt.legend()

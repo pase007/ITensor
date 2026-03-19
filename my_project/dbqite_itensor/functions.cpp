@@ -18,9 +18,6 @@ ITensor opFromArray(Index const& s, cplx a00, cplx a01, cplx a10, cplx a11){
     return U;
 }
 
-// Build Itensor for general dimensions
-//Itensor opFromDims(){}
-
 
 // ---------------------------------
 // ---- Build ITensor for Gates ----
@@ -33,6 +30,15 @@ ITensor idGate(Index const& s){
     ITensor I(sp, s);
     for (int i=1; i<=d; i++) {
         I.set(sp(i), s(i), cplx(1.0, 0.0));
+    }
+    return I;
+}
+
+// N qubit Id generalization
+ITensor idGateN(IndexSet const& sites) {
+    ITensor I(1.0);
+    for(auto const& s : sites) {
+        I *= idGate(s);
     }
     return I;
 }
@@ -55,12 +61,20 @@ ITensor phaseOnState(ITensor const& psi_ref, Index const& s, double theta){
     return I + (exp(cplx(0.0, theta)) - cplx(1.0,0.0)) * P;
 }
 
+// R_psi(theta) Phase gate
+ITensor phaseOnStateN(ITensor const& psi_ref, IndexSet const& svec, double theta){
+    ITensor I = idGateN(svec);
+    ITensor P = projectorOnStateN(psi_ref);
+    return I + (exp(cplx(0.0, theta)) - cplx(1.0,0.0)) * P;
+}
 
-// exp(i theta H)
+
+// exp( i H theta)
 ITensor exp_i_theta_H(ITensor const& H, double theta){
-    ITensor A = expHermitian(H, cplx(0.0, theta));
-    A.swapPrime(1,0);
-    return A;
+    //for(auto const& I : inds(H)){
+        //cout << I << " H prime=" << primeLevel(I) << "\n";
+    //}
+    return expHermitian(H, cplx(0.0, theta));
 }
 
 
@@ -71,7 +85,7 @@ ITensor exp_i_theta_H(ITensor const& H, double theta){
 //Apply gate and take care of index
 ITensor applyGate(ITensor const& G, ITensor psi){
     ITensor out = G * psi;   // out has prime level 1 on site index
-    out = removeTrivial(out);
+    //out = removeTrivial(out);
     out.noPrime();
     double nrm = norm(out);
     if(!std::isfinite(nrm) || nrm == 0.0) itensor::error("overflow/underflow in applyGate");
@@ -82,13 +96,36 @@ ITensor applyGate(ITensor const& G, ITensor psi){
 
 // Multiplicate two Matricies with right indexing
 ITensor composeGate(ITensor L, ITensor R, Index const& s){
-    auto sp  = prime(s);
-    auto mid = prime(s,2);
+    Index sp  = prime(s);
+    Index mid = prime(s,2);
 
     L = replaceInds(L, {s}, {mid});   // L(sp,mid)
     R = replaceInds(R, {sp}, {mid});  // R(mid,s)
 
-    auto C = L * R;                   // (sp,s)
+    ITensor C = L * R;                   // (sp,s)
+    return C;
+}
+
+ITensor composeGateN(ITensor L, ITensor R, IndexSet const& sites){
+    vector<Index> ket_inds;
+    vector<Index> bra_inds;
+    vector<Index> mid_inds;
+
+    for(Index const& s : sites){
+        ket_inds.push_back(s);
+        bra_inds.push_back(prime(s));
+        mid_inds.push_back(prime(s,2));
+    }
+
+    // L(bra, ket) -> L(bra, mid)
+    L.replaceInds(ket_inds, mid_inds);
+
+    // R(bra, ket) -> R(mid, ket)
+    R.replaceInds(bra_inds, mid_inds);
+
+    // contracts over all mid indices
+    ITensor C = canonGateN(L * R, sites);
+    //cout << "C = " << C << endl;
     return C;
 }
 
@@ -101,6 +138,22 @@ ITensor adjointGate(ITensor const& U){
     return Udag;
 }
 
+ITensor adjointGateN(ITensor const& U){
+    vector<Index> perm_inds;
+    IndexSet is = inds(U);
+
+    // swap each neighboring pair: (s',s,s',s,...) -> (s,s',s,s',...)
+    for(int j = 0; j < length(is); j += 2){
+        perm_inds.push_back(is[j+1]);
+        perm_inds.push_back(is[j]);
+    }
+
+    ITensor Udag = permute(U, perm_inds);
+    Udag = dag(Udag);
+    Udag = swapPrime(Udag, 0, 1);
+
+    return Udag;
+}
 
 
 //Evaluate Unitary defect of Tensor
@@ -110,6 +163,16 @@ double unitary_Defect(ITensor const& U, Index const& s) {
     //cout << "This should be identity already" << UUdag << endl;
     UUdag = canonGate(UUdag,s);
     ITensor Id = idGate(s);
+    double def = norm(UUdag - Id);
+    return def;
+}
+
+//Evaluate Unitary defect of Tensor
+double unitary_DefectN(ITensor const& U, IndexSet const& sites) {
+    ITensor Udag = adjointGateN(U);
+    ITensor UUdag = composeGateN(U, Udag, sites);
+    //cout << "This should be identity already" << UUdag << endl;
+    ITensor Id = idGateN(sites);
     double def = norm(UUdag - Id);
     return def;
 }
@@ -124,6 +187,27 @@ ITensor projectorOnState(ITensor const& psi, Index const& s) {
     return P;
 }
 
+ITensor projectorOnStateN(ITensor const& psi) {
+    // collect ket indices
+    vector<Index> ket_inds;
+    vector<Index> bra_inds;
+    for(Index const& i : inds(psi)){
+        if(primeLevel(i) == 0){
+            ket_inds.push_back(i);
+            bra_inds.push_back(prime(i));
+        }
+    }
+
+    // build <psi|
+    ITensor psiDag = dag(psi);
+    psiDag.replaceInds(ket_inds, bra_inds);
+
+    // build |psi><psi|
+    ITensor P = psi * psiDag;
+
+    return P;
+}
+
 
 ITensor canonGate(ITensor G, Index const& s){
     Index sp = prime(s);
@@ -135,6 +219,14 @@ ITensor canonGate(ITensor G, Index const& s){
     return Out;
 }
 
+ITensor canonGateN(ITensor const& G, IndexSet const& sites){
+    vector<Index> ord;
+    for(Index const& s : sites){
+        ord.push_back(prime(s));
+        ord.push_back(s);
+    }
+    return permute(G, ord);
+}
 
 // Reunitarize matrix U
 ITensor reunitarize_polar_gate(ITensor const& U, Index const& s, double eps){
@@ -193,8 +285,7 @@ ITensor reunitarize_polar_svd(ITensor const& U, Index const& s){
 // -------------------------------------------------
 
 // Compute <psi|Op|psi>
-double expectation(ITensor const& psi, ITensor const& Op, Index const& s){
-    Index sp = prime(s);
+double expectation(ITensor const& psi, ITensor const& Op){
     ITensor OpPsi = Op * psi;
     ITensor psiDag = prime(dag(psi));
     double expect = real( (psiDag * OpPsi).eltC() );

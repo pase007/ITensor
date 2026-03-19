@@ -19,6 +19,7 @@ using namespace std;
 using itensor::Index;
 using itensor::ITensor;
 using itensor::combiner;
+using itensor::replaceTags;
 using cplx = complex<double>;
 
 
@@ -26,12 +27,13 @@ class TwoQubitTestModel {
 private:
     Index s1_;
     Index s2_;
+    Index scomb_;
 
     ITensor H_;
 
-    ITensor phi1_;
-    ITensor phi2_;
-    ITensor phi_;
+    ITensor psi1_;
+    ITensor psi2_;
+    ITensor psi_;
 
     ITensor ket01_;
     ITensor ket02_;
@@ -43,12 +45,13 @@ public:
     // Getters
     const Index& s1() const { return s1_; }
     const Index& s2() const { return s2_; }
+    const Index& scomb() const { return scomb_; }
 
     const ITensor& H() const { return H_; }
 
-    ITensor const& phi1() const { return phi1_; }
-    ITensor const& phi2() const { return phi2_; }
-    ITensor const& phi() const { return phi_; }
+    ITensor const& psi1() const { return psi1_; }
+    ITensor const& psi2() const { return psi2_; }
+    ITensor const& psi() const { return psi_; }
 
     ITensor const& ket01() const { return ket01_; }
     ITensor const& ket02() const { return ket02_; }
@@ -60,8 +63,8 @@ public:
 
     void printSummary() const;
     void print_state() const;
-    void printAsMatrix(ITensor const& A) const;
-    void printAsVector(ITensor const& psi) const;
+    ITensor transformToMatrix(ITensor const& A) const;
+    ITensor transformToVector(ITensor const& psi) const;
 
 
     void basicModelLoop(const AlgoLoopParams& params) const;

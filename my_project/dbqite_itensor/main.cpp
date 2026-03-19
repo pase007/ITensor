@@ -16,16 +16,91 @@ using namespace std;
 ///////////////////////// Main ////////////////////////////
 int main(){
     cout << fixed << setprecision(14);
+    TestModel model;
+    TwoQubitTestModel model3(OneQubitOp::I, OneQubitOp::X);
+    //model3.printSummary();
 
     // Model
-    TestModel model;
-    TwoQubitTestModel model2(OneQubitOp::I, OneQubitOp::Z);
+    double theta = sqrt(0.5);
+    double infid_target = 1E-10;
+    string str_infid_target = "1E-10";
+    int K = 30;
+    TwoQubitTestModel model2(OneQubitOp::I, OneQubitOp::X);
+    //model2.printSummary();
+    ITensor ket0 = model2.ket0();
+    ITensor psi0 = model2.psi();
+    ITensor H = model2.H();
+    cout << "H = " << H << endl;
+    IndexSet s12 = IndexSet(model2.s1(), model2.s2());
 
-    if (true) {
-        model2.printSummary();
-        model2.printAsMatrix(model2.H());
-        model2.printAsVector(model2.phi());
+    //Data container
+    vector<Row> rows;
+    rows.reserve(K+1);
+    cout << "norm psi\tk\tEnergy(<X>)\t\tInfidelity(|->)\t\tunitarity defect\n";
+    double Ek, Fk, IFk;
+
+    // Start U0 = I
+    ITensor U = idGateN(s12);
+    ITensor I = idGateN(s12);
+    //cout << "U0 = " << U << endl;
+    //cout << "ket0 = " << ket0 << endl;
+
+    // Contruct Unitaries A and R
+    ITensor A  = exp_i_theta_H(H, theta);
+    //cout << "A = " << A << endl;
+    ITensor Ad = adjointGateN(A);
+    //cout << "Ad = " << Ad << endl;
+    ITensor R0 = phaseOnStateN(psi0, s12, theta);
+    //cout << "R0 = " << R0 << endl;
+
+    for(int k = 0; k <= K; k++){
+        // Build ITensor gate from U and apply to phi(k-1)
+        ITensor psi = applyGate(U, psi0);
+        cout << norm(psi) << "\t";
+
+        // Calculate Observables and save them
+        Ek = expectation(psi, H);
+        Fk = fidelity(psi, ket0);
+        IFk = 1 - Fk;
+        rows.push_back(Row{k, Ek, Fk});
+
+        cout << k << "\t" << Ek << "\t" << IFk << "\t";
+        if (IFk < infid_target) {
+            cout << "\nInfidelity of " << str_infid_target << " after " << k << " steps achieved!" << endl;
+            break;
+        }
+
+        // DB-QITE recursion: U_{k+1} = A * U * Rk * U' * A' * U
+        ITensor Ud = adjointGateN(U);
+        //cout << "U = " << U << endl;
+        //cout << "Ud = " << Ud << endl;
+        //cout << "--------------------------------- I Am Here ----------------------------------" << endl;
+        ITensor Ui = U;
+
+        Ui = composeGateN(A, U, s12);
+        Ui = composeGateN(Ui, R0, s12);
+        Ui = composeGateN(Ui, Ud, s12);
+        Ui = composeGateN(Ui, Ad, s12);
+        cout << "-U: " << unitary_DefectN(Ui, s12) << "\n";
+        Ui = composeGateN(Ui, U, s12);
+        //cout << "Ui = " << Ui << "\n";
+
+        //Next step
+        if (unitary_DefectN(Ui, s12) > 1E-12) {
+            //cout << "U: " << unitary_Defect(Ui, s_comb);
+            //cout << " -- start Unitarization -- ";
+            //Ui = reunitarize_polar_gate(Ui, s_comb);
+            //cout << "Unitarization complete -- ";
+            //cout << "U: " << unitary_Defect(Ui, s_comb) << "\n";
+            U = Ui;
+        }else{
+            U = Ui;
+        }
     }
+    write_csv("data4.csv", rows);
+
+
+
 
 
 
@@ -33,7 +108,7 @@ int main(){
 
     // ------------ Generate new Data or Plot existing Data -------------
     bool Data = false;
-    bool Plot = false;
+    bool Plot = true;
 
     if (Data == true){
         // Params for Fidelity in time Algo
@@ -68,12 +143,12 @@ int main(){
     }
 
     if (Plot == true) {
-        //plot_with_python_S("data.csv", "plot.png"); // creates plot_energy.png + plot_fidelity.png
+        plot_with_python_S("data4.csv", "plot.png"); // creates plot_energy.png + plot_fidelity.png
         //plot_with_python({"data0.2.csv", "data0.4.csv", "data0.5.csv", "data0.6.csv", "data0.8.csv", "data1.0.csv"}, "plot.png", "python3", "plot.py");
 
         //plot_with_python({"data1E-3opt.csv", "data1E-5opt.csv", "data1E-7opt.csv", "data1E-9opt.csv", "data1E-11opt.csv", "data1E-13opt.csv"}, "plotOpti.png", "python3", "plot.py", "opti");
 
-        plot_with_python({"data0.6eps.csv","data0.5eps.csv", "data0.4eps.csv"}, "plot_eps.png", "python3", "plot.py", "infid_trace");
+        //plot_with_python({"data0.6eps.csv","data0.5eps.csv", "data0.4eps.csv"}, "plot_eps.png", "python3", "plot.py", "infid_trace");
     }
 
 

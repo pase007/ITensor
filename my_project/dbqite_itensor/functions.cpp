@@ -266,6 +266,42 @@ ITensor reunitarize_polar_gate(ITensor const& U, Index const& s, double eps){
     return Q;
 }
 
+ITensor reunitarize_polar_gateN(ITensor const& U, IndexSet const& sins, double eps){
+    // Adjoint and G
+    ITensor Udag = adjointGateN(U);
+    ITensor G = composeGateN(Udag, U, sins);
+
+    // Optional sanity check:
+    for(Index const& s : sins){
+        if(!hasIndex(G,s) || !hasIndex(G,prime(s)))
+            itensor::error("reunitarize_polar_gateN: G missing expected indices");
+    }
+
+    // Diagonalize Hermitian G
+    ITensor D, V;
+    diagHermitian(G, V, D);
+    ITensor Vdag = dag(V);
+    V = prime(V);
+
+    // Build D^{-1/2}
+    IndexSet is = inds(D);
+    Index d  = is[0];
+    Index dp = is[1];
+
+    ITensor Dinv2(d,dp);
+    for(int n = 1; n <= dim(d); ++n){
+        auto lamC = eltC(D,d(n),dp(n));
+        double lam = real(lamC);
+        if(lam < eps) lam = eps;
+        Dinv2.set(d(n),dp(n),1.0/sqrt(lam));
+    }
+
+    // Reconstruct G^{-1/2}
+    ITensor Ginv2 = V * Dinv2 * Vdag;
+    ITensor Q = composeGateN(U, Ginv2, sins);
+    return Q;
+}
+
 
 ITensor reunitarize_polar_svd(ITensor const& U, Index const& s){
     cout << "Step 1 - ";

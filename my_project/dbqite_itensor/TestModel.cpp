@@ -211,8 +211,8 @@ void TestModel::optimizeStepsLoop(const AlgoOptParams& params) const {
     double Fk, IFk;
     cout << "current s\tsteps k" << endl;
 
-    for (int k = 0; k <= s_N; k++) {
-        double s_step = s_min + s_bin*k;
+    for (int j = 0; j <= s_N; j++) {
+        double s_step = s_min + s_bin*j;
         double theta = sqrt(s_step);
         cout << s_step << "\t";
 

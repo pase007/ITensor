@@ -3,6 +3,9 @@ import csv
 import re
 import numpy as np
 import matplotlib.pyplot as plt
+from uncertainties import ufloat as un
+import FitStuff
+from FitStuff import daten_fitten, linear_funct
 
 
 # ------------- Extraction of Data in filename (Latter maybe add headers?) --------------------
@@ -95,7 +98,7 @@ def plot_single_curves(out_png, csv_path, mode="F"):
     plt.show()
 
 
-def plot_multiple_fids(out_png, csv_files, mode="IF" ):
+def plot_multiple_fids(out_png, csv_files, mode="IF", theo=True ):
     plt.figure()
 
     for csv_path in csv_files:
@@ -107,8 +110,9 @@ def plot_multiple_fids(out_png, csv_files, mode="IF" ):
 
         s_step = extract_s_step(csv_path)
         tau = ks #* s_step
-        k = np.linspace(0, int(max(tau)), 12)
-        f_exact = 0.5 * (1.0 + np.tanh(2.0 * k*s_step))
+        k = np.linspace(0, int(max(tau)), 100)
+        f_exact = 0.5 * (1.0 + np.tanh(k*s_step))
+        f_exact = f_exact**2
 
         label = f"s={s_step}"
         if mode == "IF":
@@ -121,11 +125,13 @@ def plot_multiple_fids(out_png, csv_files, mode="IF" ):
             fid_y = F
             f_theo = f_exact
         plt.plot(tau, fid_y, marker="o", label=label, markersize=2.5)
-        plt.plot(k, f_theo, linestyle="--", linewidth=1, label="Analytic_"+f"{s_step}")
+        if theo:
+            plt.plot(k, f_theo, linestyle="--", linewidth=1, label="Analytic_"+f"{s_step}")
 
     # Analytic curve (use smallest step for smooth reference)
     tau_ref = np.linspace(0, max(tau), 500)
     F_exact = 0.5 * (1.0 + np.tanh(2.0 * tau_ref))
+    F_exact = F_exact**2
     If_exact = 1.0 - F_exact
 
 
@@ -146,9 +152,9 @@ def plot_multiple_fids(out_png, csv_files, mode="IF" ):
     #plt.plot(tau_ref, fid_theo, linestyle="--", linewidth=1, label="Analytic")
     #plt.xlabel("normalized time τ = s k")
     plt.xlabel("Number of steps k")
-    plt.yscale("log")
-    plt.xscale("log")
-    #plt.xlim(-0.1, 8.1)
+    #plt.yscale("log")
+    #plt.xscale("log")
+    plt.xlim(-0.1, 8.1)
     #plt.ylim(0.49, 1.01)
     plt.legend()
     plt.grid(True)
@@ -198,12 +204,51 @@ def plot_infidelity_trace(out_png, csv_files):
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)
 
+def plot_infidelity_trace_fit(out_png, csv_files):
+    plt.figure()
+
+    for csv_path in csv_files:
+        data = np.loadtxt(csv_path, delimiter=",", skiprows=1)
+        e = data[:,0]
+        k = data[:,1]
+        elog = np.log(e)
+
+        s = extract_data_full(csv_path)
+        label = f"s={s}"
+        plt.plot(e, k, marker="o", label=label, markersize=2.0)
+
+        pars, stdevs, xfit, yfit = daten_fitten(linear_funct, elog, k, 30, [30, -3])
+        C = np.log(10) / np.log(3)
+        m = un(pars[0], stdevs[0])
+        A0 = un(pars[1], stdevs[1])
+        B_tilde = -C / m
+        plt.plot(np.exp(xfit), yfit, 'o', markersize = 0, label=f"s={s} fit: B={B_tilde}", linestyle='--', linewidth=0.5)
+        print(
+            f"fit of step s={s}: "
+            f"m={m} and "
+            f"A0={A0}. "
+            f"B_tilde={B_tilde}"
+        )
+
+
+
+    plt.ylabel("Number of steps k")
+    plt.title("#Steps to reach infidelity target for s")
+    plt.xlabel("Infidelity target epsilon")
+    plt.xscale("log")
+    plt.yticks(np.arange(min(k), max(k), 2))
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=200)
+
 # ------------------- Available Plot functions and command dict -----------------------
 commands = {
     "single": plot_single_curves,
     "infid_trace": plot_infidelity_trace,
     "multi": plot_multiple_fids,
-    "opti": plot_optimization
+    "opti": plot_optimization,
+    "infid_fit_trace": plot_infidelity_trace_fit
 }
 def main():
     command = sys.argv[1]
@@ -219,6 +264,9 @@ def main():
 
     elif command == "infid_trace":
         plot_infidelity_trace(sys.argv[2], sys.argv[3:])
+
+    elif command == "infid_fit_trace":
+        plot_infidelity_trace_fit(sys.argv[2], sys.argv[3:])
 
     else:
         print("Unknown command")

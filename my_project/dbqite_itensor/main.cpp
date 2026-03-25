@@ -17,100 +17,63 @@ using namespace std;
 int main(){
     cout << fixed << setprecision(14);
     TestModel model;
-    TwoQubitTestModel model3(OneQubitOp::I, OneQubitOp::X);
-    //model3.printSummary();
-
-    // Model
-    double theta = sqrt(0.5);
-    double infid_target = 1E-10;
-    string str_infid_target = "1E-10";
-    int K = 30;
     TwoQubitTestModel model2(OneQubitOp::I, OneQubitOp::X);
-    //model2.printSummary();
-    ITensor ket0 = model2.ket0();
-    ITensor psi0 = model2.psi();
-    ITensor H = model2.H();
-    cout << "H = " << H << endl;
-    IndexSet s12 = IndexSet(model2.s1(), model2.s2());
-
-    //Data container
-    vector<Row> rows;
-    rows.reserve(K+1);
-    cout << "norm psi\tk\tEnergy(<X>)\t\tInfidelity(|->)\t\tunitarity defect\n";
-    double Ek, Fk, IFk;
-
-    // Start U0 = I
-    ITensor U = idGateN(s12);
-    ITensor I = idGateN(s12);
-    //cout << "U0 = " << U << endl;
-    //cout << "ket0 = " << ket0 << endl;
-
-    // Contruct Unitaries A and R
-    ITensor A  = exp_i_theta_H(H, theta);
-    //cout << "A = " << A << endl;
-    ITensor Ad = adjointGateN(A);
-    //cout << "Ad = " << Ad << endl;
-    ITensor R0 = phaseOnStateN(psi0, s12, theta);
-    //cout << "R0 = " << R0 << endl;
-
-    for(int k = 0; k <= K; k++){
-        // Build ITensor gate from U and apply to phi(k-1)
-        ITensor psi = applyGate(U, psi0);
-        cout << norm(psi) << "\t";
-
-        // Calculate Observables and save them
-        Ek = expectation(psi, H);
-        Fk = fidelity(psi, ket0);
-        IFk = 1 - Fk;
-        rows.push_back(Row{k, Ek, Fk});
-
-        cout << k << "\t" << Ek << "\t" << IFk << "\t";
-        if (IFk < infid_target) {
-            cout << "\nInfidelity of " << str_infid_target << " after " << k << " steps achieved!" << endl;
-            break;
-        }
-
-        // DB-QITE recursion: U_{k+1} = A * U * Rk * U' * A' * U
-        ITensor Ud = adjointGateN(U);
-        //cout << "U = " << U << endl;
-        //cout << "Ud = " << Ud << endl;
-        //cout << "--------------------------------- I Am Here ----------------------------------" << endl;
-        ITensor Ui = U;
-
-        Ui = composeGateN(A, U, s12);
-        Ui = composeGateN(Ui, R0, s12);
-        Ui = composeGateN(Ui, Ud, s12);
-        Ui = composeGateN(Ui, Ad, s12);
-        cout << "-U: " << unitary_DefectN(Ui, s12) << "\n";
-        Ui = composeGateN(Ui, U, s12);
-        //cout << "Ui = " << Ui << "\n";
-
-        //Next step
-        if (unitary_DefectN(Ui, s12) > 1E-12) {
-            //cout << "U: " << unitary_Defect(Ui, s_comb);
-            //cout << " -- start Unitarization -- ";
-            //Ui = reunitarize_polar_gate(Ui, s_comb);
-            //cout << "Unitarization complete -- ";
-            //cout << "U: " << unitary_Defect(Ui, s_comb) << "\n";
-            U = Ui;
-        }else{
-            U = Ui;
-        }
-    }
-    write_csv("data4.csv", rows);
-
-
-
-
 
 
 
 
     // ------------ Generate new Data or Plot existing Data -------------
-    bool Data = false;
+    bool Data1 = false;
+    bool Data2 = true;
     bool Plot = true;
 
-    if (Data == true){
+    if (Data2 == true) {
+        // Params for Fidelity in time Algo
+        vector<double> s_step_vec = {0.1, 0.6, 0.5, 0.4, 0.2};
+        vector<string> s_step_vec_str = {"0.1", "0.6", "0.5", "0.4", "0.2"};
+
+        for (int i = 0; i < s_step_vec.size(); i++) {
+            AlgoLoopParams loop_params2;
+            loop_params2.s_step = s_step_vec[i];
+            loop_params2.s_string = s_step_vec_str[i];
+            loop_params2.K = 100;
+            loop_params2.infid_target = 1E-14;
+            loop_params2.str_infid_target = "1E-14";
+            model2.basicModelLoop(loop_params2);
+        }
+
+
+        // Params for optimization for given epsilon
+        vector<double> e_step_vec = {1E-3, 1E-5, 1E-7, 1E-9, 1E-11, 1E-13};
+        vector<string> e_step_vec_str = {"1E-3", "1E-5", "1E-7", "1E-9", "1E-11", "1E-13"};
+
+        for (int i = 0; i < e_step_vec.size(); i++) {
+            AlgoOptParams opt_params2;
+            opt_params2.s_min = 0.3;
+            opt_params2.s_bin = 0.05;
+            opt_params2.s_N = 12;
+            opt_params2.K_max = 100;
+            opt_params2.infid_target = e_step_vec[i];
+            opt_params2.str_infid_target = e_step_vec_str[i];
+
+            //model2.optimizeStepsLoop(opt_params2);
+        }
+
+        // Params for reacing target infidelities
+        for (int i = 0; i < s_step_vec.size(); i++) {
+            AlgoInfidParams eps_params2;
+            eps_params2.s_step = s_step_vec[i];
+            eps_params2.s_string = s_step_vec_str[i];
+            eps_params2.K_max = 100;
+            eps_params2.infid_min = 1E-2;
+            eps_params2.infid_N = 14;
+
+            //model2.degradingInfidLoop(eps_params2);
+        }
+
+    }
+
+    if (Data1 == true){
         // Params for Fidelity in time Algo
         AlgoLoopParams loop_params;
         loop_params.s_step = 0.6;
@@ -125,13 +88,13 @@ int main(){
         opt_params.s_bin = 0.05;
         opt_params.s_N = 20;
         opt_params.K_max = 100;
-        opt_params.infid_target = 1E-13;
-        opt_params.str_infid_target = "1E-13";
+        opt_params.infid_target = 1E-3;
+        opt_params.str_infid_target = "1E-3";
 
         // Params for reacing target infidelities
         AlgoInfidParams eps_params;
-        eps_params.s_step = 0.6;
-        eps_params.s_string = "0.6";
+        eps_params.s_step = 0.2;
+        eps_params.s_string = "0.2";
         eps_params.K_max = 150;
         eps_params.infid_min = 1E-2;
         eps_params.infid_N = 15;
@@ -143,12 +106,16 @@ int main(){
     }
 
     if (Plot == true) {
-        plot_with_python_S("data4.csv", "plot.png"); // creates plot_energy.png + plot_fidelity.png
+        //plot_with_python_S("data0.5D.csv", "plot.png", "python3", "plot.py");
+
+        plot_with_python({ "data0.1D.csv", "data0.6D.csv", "data0.5D.csv", "data0.2D.csv"}, "plotN2.png", "python3", "plot.py"); // creates plot_energy.png + plot_fidelity.png
         //plot_with_python({"data0.2.csv", "data0.4.csv", "data0.5.csv", "data0.6.csv", "data0.8.csv", "data1.0.csv"}, "plot.png", "python3", "plot.py");
 
         //plot_with_python({"data1E-3opt.csv", "data1E-5opt.csv", "data1E-7opt.csv", "data1E-9opt.csv", "data1E-11opt.csv", "data1E-13opt.csv"}, "plotOpti.png", "python3", "plot.py", "opti");
+        //plot_with_python({"data1E-3optD2.csv", "data1E-5optD2.csv", "data1E-7optD2.csv", "data1E-9optD2.csv", "data1E-11optD2.csv", "data1E-13optD2.csv"}, "plotOptiD2.png", "python3", "plot.py", "opti");
 
-        //plot_with_python({"data0.6eps.csv","data0.5eps.csv", "data0.4eps.csv"}, "plot_eps.png", "python3", "plot.py", "infid_trace");
+        //plot_with_python({"data0.8epsD2.csv", "data0.6epsD2.csv","data0.5epsD2.csv", "data0.4epsD2.csv"}, "plot_epsD2_fit.png", "python3", "plot.py", "infid_fit_trace");
+        //plot_with_python({"data0.8eps.csv", "data0.6eps.csv","data0.5eps.csv", "data0.4eps.csv", "data0.2eps.csv"}, "plot_eps_fit.png", "python3", "plot.py", "infid_fit_trace");
     }
 
 

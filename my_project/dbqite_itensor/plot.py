@@ -98,7 +98,7 @@ def plot_single_curves(out_png, csv_path, mode="F"):
     plt.show()
 
 
-def plot_multiple_fids(out_png, csv_files, mode="IF", theo=True ):
+def plot_multiple_fids(out_png, csv_files, mode="IF", theo=False ):
     plt.figure()
 
     for csv_path in csv_files:

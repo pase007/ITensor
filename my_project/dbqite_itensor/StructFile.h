@@ -8,6 +8,7 @@
 #include <iostream>
 #include <iomanip>
 using namespace std;
+using cplx = complex<double>;
 
 // Algorithm Parameters
 struct AlgoLoopParams{
@@ -33,6 +34,14 @@ struct AlgoInfidParams{
     int K_max;
     double infid_min;
     int infid_N;
+};
+
+
+//Helper for Hamiltonians
+struct PauliTerm{
+    cplx coeff;
+    char left;
+    char right;
 };
 
 

@@ -10,7 +10,7 @@ CXXFLAGS += -Wno-deprecated-declarations
 LDFLAGS := -L$(ITENSOR_PARENT)/lib
 LDLIBS  := -litensor -framework Accelerate
 
-SRC := main.cpp functions.cpp data.cpp TestModel.cpp StructFile.cpp TwoQubitTestModel.cpp BuildingHamiltonians.cpp OneSigmaSite.cpp BaseModel.cpp
+SRC := main.cpp functions.cpp data.cpp TestModel.cpp StructFile.cpp TwoQubitTestModel.cpp BuildingHamiltonians.cpp OneSigmaSite.cpp BaseModel.cpp BaseModel2.cpp TwoSigmaSite.cpp
 OBJ := $(SRC:.cpp=.o)
 
 all: dbqite_itensor
@@ -18,7 +18,7 @@ all: dbqite_itensor
 dbqite_itensor: $(OBJ)
 	$(CXX) $(CXXFLAGS) $(OBJ) -o $@ $(LDFLAGS) $(LDLIBS)
 
-%.o: %.cpp functions.h data.h TestModel.h StructFile.h TwoQubitTestModel.h BuildingHamiltonians.h OneSigmaSite.h BaseModel.h
+%.o: %.cpp functions.h data.h TestModel.h StructFile.h TwoQubitTestModel.h BuildingHamiltonians.h OneSigmaSite.h BaseModel.h BaseModel2.h TwoSigmaSite.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:

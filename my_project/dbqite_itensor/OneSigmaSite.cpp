@@ -8,12 +8,12 @@ OneSigmaSite::OneSigmaSite(double g)
     g_ = g;
     H0_  = diagOp4(s_, 0, pow(g_,2), pow(g_,2), pow(g_,2));
 
-    H_1 = linearCombination4(s_, {
+    H1_ = linearCombination4(s_, {
         {3/(4*pow(g_,2)*sqrt(3)), 'I', 'Y'},
         {3/(4*pow(g_,2)*sqrt(3)), 'Y', 'Z'},
         {3/(4*pow(g_,2)*sqrt(3)), 'Y', 'X'}});
 
-    H_ = H_0;
+    H_ = H0_;
 
     // Start state
     phi_ = ITensor(s_);

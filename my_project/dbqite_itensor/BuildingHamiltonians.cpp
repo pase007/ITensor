@@ -18,6 +18,9 @@ ITensor BuildingHamiltonians::make(const Index& s, OneQubitOp op){
         case OneQubitOp::Z:
             return opFromArray(s, 1.0, 0.0, 0.0, -1.0);
 
+        case OneQubitOp::Hd:
+            return opFromArray(s, 1.0/sqrt(2.0), 1.0/sqrt(2.0), 1.0/sqrt(2.0), -1.0/sqrt(2.0));
+
         default:
             itensor::error("Unknown one-qubit operator");
             return ITensor();
@@ -41,12 +44,23 @@ ITensor opFromMatrix4(Index const& s, array<cplx,16> const& M){
     return Op;
 }
 
+ITensor hadamard4(Index const& s){
+    double a = 0.5; // = 1/2
+    return opFromMatrix4(s, {
+         a,  a,  a,  a,
+         a, -a,  a, -a,
+         a,  a, -a, -a,
+         a, -a, -a,  a
+    });
+}
+
 array<cplx,4> pauli2(char which){
     switch(which){
         case 'I': return {1.0, 0.0, 0.0, 1.0};
         case 'X': return {0.0, 1.0, 1.0, 0.0};
         case 'Y': return {0.0, cplx(0.0,-1.0), cplx(0.0,1.0), 0.0};
         case 'Z': return {1.0, 0.0, 0.0, -1.0};
+        case 'H':return {1.0/sqrt(2.0), 1.0/sqrt(2.0), 1.0/sqrt(2.0), -1.0/sqrt(2.0)};
         default:
             throw runtime_error("Unknown Pauli label");
     }

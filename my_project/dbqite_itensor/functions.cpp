@@ -303,19 +303,7 @@ ITensor reunitarize_polar_gateN(ITensor const& U, IndexSet const& sins, double e
 }
 
 
-ITensor reunitarize_polar_svd(ITensor const& U, Index const& s){
-    cout << "Step 1 - ";
-    cout << "Step 2 - ";
-    ITensor W, S, V;
-    cout << "order(U) = " << order(U) << "\n";
-    cout << inds(U);
-    cout << "Step 3 - ";
-    svd(U, W, S, V);
-    cout << "Step 4 - ";
-    auto Q = W * adjointGate(V);
-    cout << "Step 5 - ";
-    return canonGate(Q, s);
-}
+
 // -------------------------------------------------
 // --- Build functions for measuring Observables ---
 // -------------------------------------------------
@@ -333,6 +321,16 @@ double expectation(ITensor const& psi, ITensor const& Op){
 double fidelity(ITensor const& psi, ITensor const& phi){
     cplx fid = (dag(phi) * psi).eltC();
     return abs(fid)*abs(fid);
+}
+
+double fidelityToSubspace(ITensor const& psi, vector<ITensor> const& basis){
+    double F = 0.0;
+
+    for(auto const& phi : basis){
+        cplx ov = (dag(phi) * psi).eltC();
+        F += norm(ov);
+    }
+    return F;
 }
 
 

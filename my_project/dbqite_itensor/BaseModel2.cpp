@@ -4,11 +4,12 @@
 
 #include "BaseModel2.h"
 
+// Printing Details
 void BaseModel2::printSummary() const{
     cout << "Site index: " << s1_ << " and " << s2_ << "\n";
-    cout << "H = " << H_ << "\n";
-    //cout << "phi = " << phi_ << "\n";
-    //cout << "ket0 = " << ket0_ << "\n";
+    //cout << "H = " << H_ << "\n";
+    cout << "GS: E = " << E0_ << " and Xi = " << groundspace_[0] << "\n";
+    cout << "start-state: psi0 = " << psi0_ << "\n";
 }
 
 void BaseModel2::print_state() const {
@@ -16,6 +17,126 @@ void BaseModel2::print_state() const {
     //cout << "state Phi = " << phi_ << "\n";
 }
 
+
+pair<double, vector<ITensor>> BaseModel2::groundSpace2(double tol) const{
+    ITensor D, V;
+    diagHermitian(H_, V, D);
+
+    auto dinds = inds(D);
+    if(length(dinds) != 2){
+        itensor::error("groundSpace2: D does not have exactly 2 indices");
+    }
+
+    Index d  = dinds[0];
+    Index dp = dinds[1];
+
+    if(dim(d) != dim(dp)){
+        itensor::error("groundSpace2: eigenvalue indices of D have different dimensions");
+    }
+
+    double Emin = std::numeric_limits<double>::infinity();
+    for(int n = 1; n <= dim(d); ++n){
+        double lam = real(eltC(D, d(n), dp(n)));
+        if(lam < Emin) Emin = lam;
+    }
+
+    auto vinds = inds(V);
+    Index u;
+    bool found_u = false;
+    for(auto const& I : vinds){
+        if(I != s1_ && I != s2_){
+            u = I;
+            found_u = true;
+            break;
+        }
+    }
+
+    if(!found_u){
+        itensor::error("groundSpace2: could not identify eigenvector index in V");
+    }
+
+    vector<ITensor> gs_vecs;
+
+    for(int n = 1; n <= dim(d); ++n){
+        double lam = real(eltC(D, d(n), dp(n)));
+
+        if(std::abs(lam - Emin) < tol){
+            ITensor psi = V * setElt(u(n));
+            auto nrm = norm(psi);
+            if(nrm > 0.0) psi /= nrm;
+            gs_vecs.push_back(psi);
+        }
+    }
+
+    return {Emin, gs_vecs};
+}
+
+void BaseModel2::checkGroundStateDegeneracy(double tol) const{
+        ITensor D, V;
+        diagHermitian(H_, V, D);
+
+        auto dinds = inds(D);
+        if(length(dinds) != 2)
+            itensor::error("checkSpectrum: D does not have exactly 2 indices");
+
+        Index d  = dinds[0];
+        Index dp = dinds[1];
+
+        // Finde minimalen Eigenwert
+        double Emin = std::numeric_limits<double>::infinity();
+        for(int n = 1; n <= dim(d); ++n){
+            double lam = real(eltC(D, d(n), dp(n)));
+            if(lam < Emin) Emin = lam;
+        }
+
+        std::cout << "================ Spectrum =================\n";
+
+        // Finde Eigenvektor-Index
+        Index u;
+        bool found_u = false;
+        for(auto const& I : inds(V)){
+            if(I != s1_ && I != s2_){
+                u = I;
+                found_u = true;
+                break;
+            }
+        }
+        if(!found_u)
+            itensor::error("checkSpectrum: could not find eigenvector index");
+
+        int degeneracy = 0;
+
+        for(int n = 1; n <= dim(d); ++n){
+            double lam = real(eltC(D, d(n), dp(n)));
+
+            bool isGS = std::abs(lam - Emin) < tol;
+            if(isGS) degeneracy++;
+
+            std::cout << "Eigenvalue " << n << " = " << lam;
+            if(isGS) std::cout << "   <-- GS";
+            std::cout << "\n";
+
+            // Für die ersten paar oder für GS-Zustände drucken
+            if( isGS){
+                ITensor psi = V * setElt(u(n));
+                auto nrm = norm(psi);
+                if(nrm > 0.0) psi /= nrm;
+
+                std::cout << "State " << n << ":\n";
+                std::cout << psi << "\n";
+            }
+
+            std::cout << "------------------------------------------\n";
+        }
+
+        std::cout << "Ground-state energy: " << Emin << "\n";
+        std::cout << "Degeneracy: " << degeneracy << "\n";
+        std::cout << "==========================================\n";
+}
+
+
+
+// Transformation between Representations
 ITensor BaseModel2::transformToMatrix(ITensor const& A) const {
     vector<Index> ket_inds;
     vector<Index> bra_inds;
@@ -69,6 +190,8 @@ ITensor BaseModel2::transformToVector(ITensor const& psi) const {
 }
 
 
+
+// ------------------------------------------ Algorithm Section ---------------------------------------------------
 void BaseModel2::basicModelLoop(const AlgoLoopParams& params) const {
     const double s_step = params.s_step;
     double theta = sqrt(s_step);
@@ -80,30 +203,32 @@ void BaseModel2::basicModelLoop(const AlgoLoopParams& params) const {
     //Data container
     vector<Row> rows;
     rows.reserve(K+1);
-    cout << "norm psi\t\tk\tEnergy(<X>)\t\tInfidelity(|->)\t\tunitarity defect\n";
+    cout << "norm psi\t\tk\tEnergy(<X>)\t\tInfidelity(|->)\n"; //"\t\tunitarity defect\n";
     double Ek, Fk, IFk;
 
     // Start U0 = I
-    ITensor U = idGateN(s12_);
+    ITensor U = U0_;
     ITensor I = idGateN(s12_);
+    ITensor psi0 = applyGate(U, p0_);
 
     // Contruct Unitaries A and R
     ITensor A  = exp_i_theta_H(H_, theta);
     ITensor Ad = adjointGateN(A);
-    ITensor R0 = phaseOnStateN(psi0_, s12_, theta);
+    ITensor R0 = phaseOnStateN(p0_, s12_, theta);
 
     for(int k = 0; k <= K; k++) {
         // Build ITensor gate from U and apply to phi(k-1)
-        ITensor psi = applyGate(U, psi0_);
+        ITensor psi = applyGate(U, p0_);
+        //cout << "Psi = " << psi << "\n";
         cout << norm(psi) << "\t";
 
         // Calculate Observables and save them
         Ek = expectation(psi, H_);
-        Fk = fidelity(psi, ket0_);
+        Fk = fidelityToSubspace(psi, groundspace_);
         IFk = 1 - Fk;
         rows.push_back(Row{k, Ek, Fk});
 
-        cout << k << "\t" << Ek << "\t" << IFk << "\t";
+        cout << k << "\t" << Ek << "\t" << IFk << "\n";
         if (IFk < infid_target) {
             cout << "\nInfidelity of " << str_infid_target << " after " << k << " steps achieved!" << endl;
             break;
@@ -117,7 +242,7 @@ void BaseModel2::basicModelLoop(const AlgoLoopParams& params) const {
         Ui = composeGateN(Ui, R0, s12_);
         Ui = composeGateN(Ui, Ud, s12_);
         Ui = composeGateN(Ui, Ad, s12_);
-        cout << "-U: " << unitary_DefectN(Ui, s12_) << "\n";
+        //cout << "-U: " << unitary_DefectN(Ui, s12_) << "\n";
         Ui = composeGateN(Ui, U, s12_);
 
         //Next step
@@ -129,7 +254,7 @@ void BaseModel2::basicModelLoop(const AlgoLoopParams& params) const {
         }
     }
     //write_csv("data4.csv", rows);
-    write_csv("data" + s_string + "D.csv", rows);
+    write_csv("data" + s_string + ".csv", rows);
 
 }
 
@@ -150,7 +275,7 @@ void BaseModel2::degradingInfidLoop(const AlgoInfidParams& params) const {
     // Contruct Unitaries A and R
     ITensor A  = exp_i_theta_H(H_, theta);
     ITensor Ad = adjointGateN(A);
-    ITensor R0 = phaseOnStateN(psi0_, s12_, theta);
+    ITensor R0 = phaseOnStateN(p0_, s12_, theta);
 
     for (int ek = 0; ek < infid_N; ek++) {
         double infid_step;
@@ -162,15 +287,15 @@ void BaseModel2::degradingInfidLoop(const AlgoInfidParams& params) const {
         cout << infid_step << "\t";
 
         // Start U0 = I
-        ITensor U = idGateN(s12_);
+        ITensor U = U0_;
         ITensor I = idGateN(s12_);
 
         for(int k = 0; k <= K_max; k++) {
             // Build ITensor gate from U and apply to phi(k-1)
-            ITensor psi = applyGate(U, psi0_);
+            ITensor psi = applyGate(U, p0_);
 
             // Calculate Observables and save them
-            Fk = fidelity(psi, ket0_);
+            Fk = fidelityToSubspace(psi, groundspace_);
             IFk = 1 - Fk;
 
             if (IFk > infid_step) {
@@ -183,7 +308,7 @@ void BaseModel2::degradingInfidLoop(const AlgoInfidParams& params) const {
                     Ui = composeGateN(Ui, R0, s12_);
                     Ui = composeGateN(Ui, Ud, s12_);
                     Ui = composeGateN(Ui, Ad, s12_);
-                    cout << "-U: " << unitary_DefectN(Ui, s12_) << "\n";
+                    //cout << "-U: " << unitary_DefectN(Ui, s12_) << "\n";
                     Ui = composeGateN(Ui, U, s12_);
 
                     //Next step
@@ -208,7 +333,7 @@ void BaseModel2::degradingInfidLoop(const AlgoInfidParams& params) const {
                 break;
             }
         }
-        write_csv_eps("data" + s_string + "epsD2.csv", rows);
+        write_csv_eps("data" + s_string + "eps.csv", rows);
     }
 }
 
@@ -233,20 +358,20 @@ void BaseModel2::optimizeStepsLoop(const AlgoOptParams& params) const {
         cout << s_step << "\t";
 
         // Start U0 = I
-        ITensor U = idGateN(s12_);
+        ITensor U = U0_;
         ITensor I = idGateN(s12_);
 
         // Contruct Unitaries A and R
         ITensor A  = exp_i_theta_H(H_, theta);
         ITensor Ad = adjointGateN(A);
-        ITensor R0 = phaseOnStateN(psi0_, s12_, theta);
+        ITensor R0 = phaseOnStateN(p0_, s12_, theta);
 
         for(int k = 0; k <= K_max; k++) {
             // Build ITensor gate from U and apply to phi(k-1)
-            ITensor psi = applyGate(U, psi0_);
+            ITensor psi = applyGate(U, p0_);
 
             // Calculate Observables and save them
-            Fk = fidelity(psi, ket0_);
+            Fk = fidelityToSubspace(psi, groundspace_);
             IFk = 1 - Fk;
 
             if (IFk > infid_target) {
@@ -281,5 +406,5 @@ void BaseModel2::optimizeStepsLoop(const AlgoOptParams& params) const {
             }
         }
     }
-    write_csv_opt("data" + str_infid_target + "optD2.csv", rows);
+    write_csv_opt("data" + str_infid_target + "opt.csv", rows);
 }

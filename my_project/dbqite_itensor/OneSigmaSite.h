@@ -9,6 +9,9 @@
 class OneSigmaSite : public BaseModel {
 protected:
     double g_;
+    ITensor j1_s_;
+    ITensor j2_s_;
+    ITensor j3_s_;
 public:
     OneSigmaSite(double g);
     const double g() const { return g_; }

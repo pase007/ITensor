@@ -14,6 +14,16 @@ TwoQubitTestModel::TwoQubitTestModel(OneQubitOp op1, OneQubitOp op2)
     //cout << "H = " << H_ << endl;
 
 
+    // start state |psi0> = |00>
+    psi1_ = ITensor(s1_);
+    psi1_.set(s1_(2), 1.0);
+    psi1_.set(s1_(1), 0.0);
+    psi2_ = ITensor(s2_);
+    psi2_.set(s2_(2), 1.0);
+    psi2_.set(s2_(1), 0.0);
+
+    psi0_ = psi1_ * psi2_;
+
     // taget: ground state |-->
     ket01_ = ITensor(s1_);
     ket01_.set(s1_(1), 1.0/sqrt(2.0));
@@ -24,15 +34,15 @@ TwoQubitTestModel::TwoQubitTestModel(OneQubitOp op1, OneQubitOp op2)
 
     ket0_ = ket01_ * ket02_;
 
-    // start state |psi0> = |00>
-    psi1_ = ITensor(s1_);
-    psi1_.set(s1_(1), 1.0);
-    psi1_.set(s1_(2), 0.0);
-    psi2_ = ITensor(s2_);
-    psi2_.set(s2_(1), 1.0);
-    psi2_.set(s2_(2), 0.0);
+	// Reflection state |00>
+	ITensor p1_ = ITensor(s1_);
+	ITensor p2_ = ITensor(s2_);
+    p1_.set(s1_(1), 1.0);
+    p1_.set(s1_(2), 0.0);
+    p2_.set(s2_(1), 1.0);
+    p2_.set(s2_(2), 0.0);
 
-    psi0_ = psi1_ * psi2_;
+    p0_ = p1_ * p2_;
 }
 
 

@@ -16,12 +16,14 @@ protected:
     ITensor j3_s1_;
     ITensor j3_s2_;
 
-    ITensor H0_;
-    ITensor H1_;
-    ITensor H2_;
-    ITensor H3_;
+    ITensor H_Ik_;
+
+    ITensor H0_s1_;
+    ITensor H0_s2_;
+
 public:
     TwoSigmaSite(double g);
     const double g() const { return g_; }
+    void buildHamiltonian_();
 };
 #endif //MY_PROJECT_TWOSIGMASITE_H

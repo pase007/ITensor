@@ -3,11 +3,12 @@
 //
 #include "functions.h"
 #include "data.h"
-#include "TestModel.h"
 #include "StructFile.h"
-#include "TwoQubitTestModel.h"
 #include "BuildingHamiltonians.h"
+#include "TestModel.h"
+#include "TwoQubitTestModel.h"
 #include "OneSigmaSite.h"
+#include "TwoSigmaSite.h"
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -48,8 +49,8 @@ void getData1(TestModel& model){
 
 void getData2(TwoQubitTestModel& model2){
 	// Params for Fidelity in time Algo
-    vector<double> s_step_vec = {0.1, 0.6, 0.5, 0.4, 0.2};
-    vector<string> s_step_vec_str = {"0.1", "0.6", "0.5", "0.4", "0.2"};
+    vector<double> s_step_vec = {0.1, 0.6, 0.5, 0.4, 0.2, 0.8};
+    vector<string> s_step_vec_str = {"0.1D2", "0.6D2", "0.5D2", "0.4D2", "0.2D2", "0.8D2"};
 
     for (int i = 0; i < s_step_vec.size(); i++) {
         AlgoLoopParams loop_params2;
@@ -58,13 +59,13 @@ void getData2(TwoQubitTestModel& model2){
         loop_params2.K = 100;
         loop_params2.infid_target = 1E-14;
         loop_params2.str_infid_target = "1E-14";
-        //model2.basicModelLoop(loop_params2);
+        model2.basicModelLoop(loop_params2);
     }
 
 
     // Params for optimization for given epsilon
     vector<double> e_step_vec = {1E-3, 1E-5, 1E-7, 1E-9, 1E-11, 1E-13};
-    vector<string> e_step_vec_str = {"1E-3", "1E-5", "1E-7", "1E-9", "1E-11", "1E-13"};
+    vector<string> e_step_vec_str = {"1E-3D2", "1E-5D2", "1E-7D2", "1E-9D2", "1E-11D2", "1E-13D2"};
 
     for (int i = 0; i < e_step_vec.size(); i++) {
         AlgoOptParams opt_params2;
@@ -74,7 +75,7 @@ void getData2(TwoQubitTestModel& model2){
         opt_params2.K_max = 100;
         opt_params2.infid_target = e_step_vec[i];
         opt_params2.str_infid_target = e_step_vec_str[i];
-        //model2.optimizeStepsLoop(opt_params2);
+        model2.optimizeStepsLoop(opt_params2);
     }
 
     // Params for reacing target infidelities
@@ -85,7 +86,7 @@ void getData2(TwoQubitTestModel& model2){
         eps_params2.K_max = 100;
         eps_params2.infid_min = 1E-2;
         eps_params2.infid_N = 14;
-        //model2.degradingInfidLoop(eps_params2);
+        model2.degradingInfidLoop(eps_params2);
     }
 }
 
@@ -131,6 +132,49 @@ void getDataSigma1(OneSigmaSite& sigma1){
 	}
 }
 
+void getSigma2(TwoSigmaSite& sigma2){
+	// Params for Fidelity in time Algo
+    vector<double> s_step_vec = {1.1, 0.6, 1.5, 0.4, 1.2, 0.8, 1.0};
+    vector<string> s_step_vec_str = {"1.1SS", "0.6SS", "1.5SS", "0.4SS", "1.2SS", "0.8SS", "1.0SS"};
+
+    for (int i = 0; i < s_step_vec.size(); i++) {
+        AlgoLoopParams loop_params2;
+        loop_params2.s_step = s_step_vec[i];
+        loop_params2.s_string = s_step_vec_str[i];
+        loop_params2.K = 100;
+        loop_params2.infid_target = 1E-14;
+        loop_params2.str_infid_target = "1E-14";
+        //sigma2.basicModelLoop(loop_params2);
+    }
+
+
+    // Params for optimization for given epsilon
+    vector<double> e_step_vec = {1E-3, 1E-5, 1E-7, 1E-9, 1E-11, 1E-13};
+    vector<string> e_step_vec_str = {"1E-3SS", "1E-5SS", "1E-7SS", "1E-9SS", "1E-11SS", "1E-13SS"};
+
+    for (int i = 0; i < e_step_vec.size(); i++) {
+        AlgoOptParams opt_params2;
+        opt_params2.s_min = 0.6;
+        opt_params2.s_bin = 0.1;
+        opt_params2.s_N = 12;
+        opt_params2.K_max = 100;
+        opt_params2.infid_target = e_step_vec[i];
+        opt_params2.str_infid_target = e_step_vec_str[i];
+        //sigma2.optimizeStepsLoop(opt_params2);
+    }
+
+    // Params for reacing target infidelities
+    for (int i = 0; i < s_step_vec.size(); i++) {
+        AlgoInfidParams eps_params2;
+        eps_params2.s_step = s_step_vec[i];
+        eps_params2.s_string = s_step_vec_str[i];
+        eps_params2.K_max = 100;
+        eps_params2.infid_min = 1E-2;
+        eps_params2.infid_N = 8;
+        sigma2.degradingInfidLoop(eps_params2);
+    }
+}
+
 ///////////////////////// Main ////////////////////////////
 int main(){
     cout << fixed << setprecision(14);
@@ -138,7 +182,8 @@ int main(){
     // ------------ Generate new Data or Plot existing Data -------------
     bool Data1 = false;
     bool Data2 = false;
-	bool DataSig1 = true;
+	bool DataSig1 = false;
+	bool DataSig2 = true;
     bool Plot = true;
 
 	//Test of Principle with 2 Hamiltonians
@@ -158,23 +203,31 @@ int main(){
 		sigma1.printSummary();
 		getDataSigma1(sigma1);
 	}
+	if (DataSig2 == true){
+		TwoSigmaSite sigma2(1.0);
+		sigma2.printSummary();
+		getSigma2(sigma2);
+	}
 
     if (Plot == true) {
         //plot_with_python_S("data0.5D.csv", "plot.png", "python3", "plot.py");
 
         //plot_with_python({"data0.2.csv", "data0.4.csv", "data0.5.csv", "data0.6.csv", "data0.8.csv", "data1.0.csv"}, "plot.png", "python3", "plot.py");
-        //plot_with_python({ "data0.1D.csv", "data0.6D.csv", "data0.5D.csv", "data0.2D.csv"}, "plotN2.png", "python3", "plot.py"); // creates plot_energy.png + plot_fidelity.png
-        plot_with_python({"data0.2S.csv", "data0.4S.csv", "data0.5S.csv", "data0.6S.csv", "data0.8S.csv", "data1.0S.csv"}, "plotSig.png", "python3", "plot.py");
+        //plot_with_python({ "data0.1D2.csv", "data0.6D2.csv", "data0.5D2.csv", "data0.2D2.csv"}, "plotN2.png", "python3", "plot.py"); // creates plot_energy.png + plot_fidelity.png
+        //plot_with_python({"data0.2S.csv", "data0.4S.csv", "data0.5S.csv", "data0.6S.csv", "data0.8S.csv", "data1.0S.csv"}, "plotSig.png", "python3", "plot.py");
+        plot_with_python({"data1.2SS.csv", "data0.4SS.csv", "data1.1SS.csv", "data0.6SS.csv", "data0.8SS.csv", "data1.0SS.csv"}, "plotSig2.png", "python3", "plot.py");
 
 
         //plot_with_python({"data1E-3opt.csv", "data1E-5opt.csv", "data1E-7opt.csv", "data1E-9opt.csv", "data1E-11opt.csv", "data1E-13opt.csv"}, "plotOpti.png", "python3", "plot.py", "opti");
         //plot_with_python({"data1E-3optD2.csv", "data1E-5optD2.csv", "data1E-7optD2.csv", "data1E-9optD2.csv", "data1E-11optD2.csv", "data1E-13optD2.csv"}, "plotOptiD2.png", "python3", "plot.py", "opti");
-        plot_with_python({"data1E-3Sopt.csv", "data1E-5Sopt.csv", "data1E-7Sopt.csv", "data1E-9Sopt.csv", "data1E-11Sopt.csv", "data1E-13Sopt.csv"}, "plotOptiSig.png", "python3", "plot.py", "opti");
+        //plot_with_python({"data1E-3Sopt.csv", "data1E-5Sopt.csv", "data1E-7Sopt.csv", "data1E-9Sopt.csv", "data1E-11Sopt.csv", "data1E-13Sopt.csv"}, "plotOptiSig.png", "python3", "plot.py", "opti");
+        plot_with_python({"data1E-3SSopt.csv", "data1E-5SSopt.csv", "data1E-7SSopt.csv", "data1E-9SSopt.csv", "data1E-11SSopt.csv", "data1E-13SSopt.csv"}, "plotOptiSig2.png", "python3", "plot.py", "opti");
 
 
-        //plot_with_python({"data0.8epsD2.csv", "data0.6epsD2.csv","data0.5epsD2.csv", "data0.4epsD2.csv"}, "plot_epsD2_fit.png", "python3", "plot.py", "infid_fit_trace");
         //plot_with_python({"data0.8eps.csv", "data0.6eps.csv","data0.5eps.csv", "data0.4eps.csv", "data0.2eps.csv"}, "plot_eps_fit.png", "python3", "plot.py", "infid_fit_trace");
-        plot_with_python({"data0.8Seps.csv", "data0.6Seps.csv","data0.5Seps.csv", "data0.4Seps.csv", "data0.2Seps.csv"}, "plot_eps_sig.png", "python3", "plot.py", "infid_trace");
+        //plot_with_python({"data0.8D2eps.csv", "data0.6D2eps.csv","data0.5D2eps.csv", "data0.4D2eps.csv"}, "plot_epsD2_fit.png", "python3", "plot.py", "infid_fit_trace");
+        //plot_with_python({"data0.8Seps.csv", "data0.6Seps.csv","data0.5Seps.csv", "data0.4Seps.csv", "data0.2Seps.csv"}, "plot_eps_sig.png", "python3", "plot.py", "infid_trace");
+        plot_with_python({"data0.8SSeps.csv", "data0.6SSeps.csv", "data1.1SSeps.csv", "data1.2SSeps.csv"}, "plot_eps_sig2.png", "python3", "plot.py", "infid_fit_trace");
 
     }
 

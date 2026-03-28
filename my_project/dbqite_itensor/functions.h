@@ -49,11 +49,11 @@ ITensor canonGate(ITensor G, Index const& s);
 ITensor canonGateN(ITensor const& G, IndexSet const& sites);
 ITensor reunitarize_polar_gate(ITensor const& U, Index const& s, double eps = 1E-10);
 ITensor reunitarize_polar_gateN(ITensor const& U, IndexSet const& sins, double eps = 1E-10);
-ITensor reunitarize_polar_svd(ITensor const& U, Index const& s);
 
 // --- Build functions for measuring Observables ---
 double expectation(ITensor const& psi, ITensor const& Op_sp_s);
 double fidelity(ITensor const& psi, ITensor const& phi);
+double fidelityToSubspace(ITensor const& psi, vector<ITensor> const& basis);
 
 
 

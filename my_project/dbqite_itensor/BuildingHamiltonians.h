@@ -19,11 +19,13 @@ enum class OneQubitOp{
     I,
     X,
     Y,
-    Z
+    Z,
+    Hd
 };
 
 ITensor opFromArray2(Index const& s, cplx a00, cplx a01, cplx a10, cplx a11);
 ITensor opFromMatrix4(Index const& s, array<cplx,16> const& M);
+ITensor hadamard4(Index const& s);
 
 struct BuildingHamiltonians{
     static ITensor make(const Index& s, OneQubitOp op);

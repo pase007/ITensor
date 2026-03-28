@@ -7,6 +7,6 @@
 #include "BaseModel2.h"
 class TwoQubitTestModel : public BaseModel2 {
 public:
-    TwoQubitModel(OneQubitOp op1, OneQubitOp op2);
+    TwoQubitTestModel(OneQubitOp op1, OneQubitOp op2);
 };
 #endif //MY_PROJECT_TWOQUBITTESTMODEL_H

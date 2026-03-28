@@ -1,5 +1,24 @@
 
-            for(auto const& I : inds(Ui)){
-                            cout << I << " Ui prime=" << primeLevel(I)
-                                      << "\n";
-                        }
+for(auto const& I : inds(Ui)){
+    cout << I << " Ui prime=" << primeLevel(I) << "\n";
+}
+
+
+psi1_.set(s1_(1), 1.0/sqrt(2.0));
+psi1_.set(s1_(2), 0.0);
+psi1_.set(s1_(3), 0.0);
+psi1_.set(s1_(4), 0.0);
+psi2_.set(s2_(1), 1.0/sqrt(2.0));
+psi2_.set(s2_(2), 0.0);
+psi2_.set(s2_(3), 0.0);
+psi2_.set(s2_(4), 0.0);
+
+
+psi1_.set(s1_(1), 1.0/sqrt(4.0)  );
+psi1_.set(s1_(2), 1.0/sqrt(4.0) );
+psi1_.set(s1_(3), 1.0/sqrt(4.0)  );
+psi1_.set(s1_(4), 1.0/sqrt(4.0) );
+psi2_.set(s2_(1), 1.0/sqrt(4.0)  );
+psi2_.set(s2_(2), 1.0/sqrt(4.0) );
+psi2_.set(s2_(3), 1.0/sqrt(4.0)  );
+psi2_.set(s2_(4), 1.0/sqrt(4.0) );

@@ -135,18 +135,18 @@ def plot_multiple_fids(out_png, csv_files, mode="IF", theo=False ):
     If_exact = 1.0 - F_exact
 
 
-    plt.ylabel("Infidelity to |->")
+    plt.ylabel("Infidelity to Ground-Subspace")
     plt.title("Infidelity vs Steps")
     if mode == "IF":
         fid_theo = If_exact
     elif mode == "F":
         fid_theo = F_exact
-        plt.ylabel("Fidelity to |->")
+        plt.ylabel("Fidelity to Ground-Subspace")
         plt.title("Fidelity vs Time")
     else:
         print("Unknown mode in Plot - default: Fidelity")
         fid_theo = F_exact
-        plt.ylabel("Fidelity to |->")
+        plt.ylabel("Fidelity to Ground-Subspace")
         plt.title("Fidelity vs Time")
 
     #plt.plot(tau_ref, fid_theo, linestyle="--", linewidth=1, label="Analytic")

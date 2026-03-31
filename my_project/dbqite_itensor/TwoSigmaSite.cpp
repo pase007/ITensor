@@ -60,7 +60,10 @@ TwoSigmaSite::TwoSigmaSite(double g)
 
 
 void TwoSigmaSite::buildHamiltonian_() {
+    ITensor I1 = diagOp4(s1_, 1.0, 1.0, 1.0, 1.0);
+    ITensor I2 = diagOp4(s2_, 1.0, 1.0, 1.0, 1.0);
+    ITensor H0 = H0_s1_ * I2 + I1 * H0_s2_;
     H_Ik_ = -3.0/(4.0*pow(g_,2))*(j1_s1_*j1_s2_ + j2_s1_*j2_s2_ + j3_s1_*j3_s2_);
-    H_ = H0_s1_ * H0_s2_ + H_Ik_;
+    H_ =  H0 + H_Ik_;
 }
 

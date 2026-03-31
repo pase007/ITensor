@@ -206,9 +206,8 @@ void BaseModel2::basicModelLoop(const AlgoLoopParams& params) const {
     cout << "norm psi\t\tk\tEnergy(<X>)\t\tInfidelity(|->)\n"; //"\t\tunitarity defect\n";
     double Ek, Fk, IFk;
 
-    // Start U0 = I
+    // Start U0 = Warm up
     ITensor U = U0_;
-    ITensor I = idGateN(s12_);
     ITensor psi0 = applyGate(U, p0_);
 
     // Contruct Unitaries A and R
@@ -286,9 +285,8 @@ void BaseModel2::degradingInfidLoop(const AlgoInfidParams& params) const {
         }
         cout << infid_step << "\t";
 
-        // Start U0 = I
+        // Start U0 = Warm up
         ITensor U = U0_;
-        ITensor I = idGateN(s12_);
 
         for(int k = 0; k <= K_max; k++) {
             // Build ITensor gate from U and apply to phi(k-1)
@@ -357,9 +355,8 @@ void BaseModel2::optimizeStepsLoop(const AlgoOptParams& params) const {
         double theta = sqrt(s_step);
         cout << s_step << "\t";
 
-        // Start U0 = I
+        // Start U0 = Warm up
         ITensor U = U0_;
-        ITensor I = idGateN(s12_);
 
         // Contruct Unitaries A and R
         ITensor A  = exp_i_theta_H(H_, theta);

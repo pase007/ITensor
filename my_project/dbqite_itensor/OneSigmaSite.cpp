@@ -6,12 +6,13 @@
 OneSigmaSite::OneSigmaSite(double g)
     : BaseModel(4, "Qutit"){
     g_ = g;
-    H0_  = diagOp4(s_, 0, pow(g_,2), pow(g_,2), pow(g_,2));
+    Id_s_ = diagOp4(s_, 1.0, 1.0, 1.0, 1.0);
 
-    H1_ = linearCombination4(s_, {
-        {3/(4*pow(g_,2)*sqrt(3)), 'I', 'Y'},
-        {3/(4*pow(g_,2)*sqrt(3)), 'Y', 'Z'},
-        {3/(4*pow(g_,2)*sqrt(3)), 'Y', 'X'}});
+    // Hamiltonian
+    H0_  = diagOp4(s_, 0, pow(g_,2), pow(g_,2), pow(g_,2));
+    j1_ = 1/sqrt(3) * pauliTensor4(s_, 'I', 'Y');
+    j2_ = 1/sqrt(3) * pauliTensor4(s_, 'Y', 'Z');
+    j3_ = 1/sqrt(3) * pauliTensor4(s_, 'Y', 'X');
 
     H_ = H0_;
 

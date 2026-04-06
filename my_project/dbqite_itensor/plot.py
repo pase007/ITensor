@@ -1,6 +1,7 @@
 import sys
 import csv
 import re
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 from uncertainties import ufloat as un
@@ -44,8 +45,89 @@ def read_csv_Opt(path):
             If.append(float(row["Infidelity"]))
     return s, k, If
 
+def read_csv(path):
+    x, y = [], []
+
+    with open(path, newline="") as f:
+        r = csv.DictReader(f)
+        for row in r:
+            x.append(float(row["g"]))
+            y.append(float(row["gap"]))
+    return x, y
+
+def read_csv_spectrum(path):
+    g = []
+    rows_of_energies = []
+    gap, gap2 = [], []
+
+    with open(path, newline="") as f:
+        reader = csv.reader(f)
+
+        next(reader, None)  # skip header
+
+        for row in reader:
+            if not row:
+                continue
+
+            gi = float(row[0])
+            energies = [float(x) for x in row[1:]]
+
+            g.append(gi)
+            rows_of_energies.append(energies)
+
+            # compute gap per row
+            if len(energies) >= 2:
+                n = len(energies)
+                gap.append(energies[n-2] - energies[n-1])
+                gap2.append(energies[n-5] - energies[n-1])
+            else:
+                gap.append(math.nan)
+                gap2.append(math.nan)
+
+    # transpose for spectrum plotting
+    max_len = max(len(row) for row in rows_of_energies)
+    padded = [row + [math.nan]*(max_len - len(row)) for row in rows_of_energies]
+    Espec = list(map(list, zip(*padded)))
+
+    return g, Espec, gap, gap2
 
 # ----------------------------- Plot Data in different ways --------------
+def plot_spectrum(out_png, csv_path, s_path):
+    g, Espec, gap, gap2 = read_csv_spectrum(csv_path)
+    gx, sy = read_csv(s_path)
+
+    # --- Spectrum plot ---
+    plt.figure()
+    plt.xlabel("coupling g")
+    plt.ylabel("Energy spectrum")
+    plt.title("Spectrum variation with coupling g")
+
+    for i, E in enumerate(Espec):
+        plt.plot(g, E, marker="o", markersize=2.5, label=f"E{i}")
+
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_png.replace(".png", "_spectrum.png"), dpi=200)
+
+    # --- Gap plot ---
+    plt.figure()
+    plt.xlabel("coupling g")
+    plt.ylabel("Δ = E1 - E0")
+    plt.title("Energy gap vs coupling g")
+
+    plt.plot(g, gap, marker="o", markersize=2.0, label="gap")
+    plt.plot(g, gap2, marker="o", markersize=2.0, label="gap2")
+    plt.plot(gx, sy, marker="o", markersize=2.0, label="opt s")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_png.replace(".png", "_gap.png"), dpi=200)
+
+    print(f"Saved {out_png.replace('.png','_spectrum.png')} and {out_png.replace('.png','_gap.png')}")
+
+
+
 def plot_single_curves(out_png, csv_path, mode="F"):
     # Numerical data
     ks, E, F = read_csv(csv_path)
@@ -161,6 +243,47 @@ def plot_multiple_fids(out_png, csv_files, mode="IF", theo=False ):
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)
 
+def plot_multiple_energies(out_png, Elevels_file, csv_files, theo=False ):
+    plt.figure()
+
+    for i,csv_path in enumerate(csv_files):
+        data = np.loadtxt(csv_path, delimiter=",", skiprows=1)
+        ks = data[:,0]
+        E  = data[:,1]
+
+        s_step = extract_s_step(csv_path)
+        tau = ks #* s_step
+        k = np.linspace(0, int(max(tau)), 100)
+        label = f"s={s_step}"
+
+        plt.plot(tau, E, marker="o", label=label, markersize=1.5)
+        if theo:
+            plt.plot(k, E, linestyle="--", linewidth=1, label="Analytic_"+f"{s_step}")
+
+        if i==1:
+            data = np.loadtxt(Elevels_file, delimiter=",", skiprows=1)
+            Elevels = data[:,0]
+            #Plot energy levels
+            for Etheo in Elevels:
+                plt.hlines(Etheo, min(tau), max(tau), linestyle="--", linewidth=1)
+
+
+
+    plt.ylabel("Energies <H>")
+    plt.title("Energy vs Steps")
+
+
+    #plt.xlabel("normalized time τ = s k")
+    plt.xlabel("Number of steps k")
+    #plt.yscale("log")
+    #plt.xscale("log")
+    #plt.xlim(-0.1, 8.1)
+    plt.ylim(-0.3, 1.5)
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=200)
+
 
 def plot_optimization(out_png, csv_files):
     plt.figure()
@@ -192,7 +315,7 @@ def plot_infidelity_trace(out_png, csv_files):
 
         s = extract_data_full(csv_path)
         label = f"s={s}"
-        plt.plot(e, k, marker="o", label=label, markersize=2.0)
+        plt.plot(e, k, marker="o", label=label, markersize=1.0)
 
     plt.ylabel("Number of steps k")
     plt.title("#Steps to reach infidelity target for s")
@@ -236,7 +359,7 @@ def plot_infidelity_trace_fit(out_png, csv_files):
     plt.title("#Steps to reach infidelity target for s")
     plt.xlabel("Infidelity target epsilon")
     plt.xscale("log")
-    plt.yticks(np.arange(min(k), max(k), 5))
+    plt.yticks(np.arange(min(k), max(k), 10))
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
@@ -259,6 +382,10 @@ def main():
     elif command == "multi":
         plot_multiple_fids(sys.argv[2], sys.argv[3:])
 
+    elif command == "multiE":
+        plot_multiple_fids(sys.argv[2], sys.argv[5:])
+        plot_multiple_energies(sys.argv[3], sys.argv[4], sys.argv[5:])
+
     elif command == "opti":
         plot_optimization(sys.argv[2], sys.argv[3:])
 
@@ -267,6 +394,9 @@ def main():
 
     elif command == "infid_fit_trace":
         plot_infidelity_trace_fit(sys.argv[2], sys.argv[3:])
+
+    elif command == "spectrum":
+        plot_spectrum(sys.argv[2], sys.argv[3], sys.argv[4] )
 
     else:
         print("Unknown command")

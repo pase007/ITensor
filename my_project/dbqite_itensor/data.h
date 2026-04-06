@@ -12,6 +12,8 @@ using namespace std;
 
 // Write CSV with header: k,Energy,Fidelity
 void write_csv(const string& filename, const vector<Row>& rows);
+void write_csv_E(const string& filename, const vector<double>& Elevels);
+void write_csv_Espectrum(const string& filename, const vector<double> g_vals, const vector<vector<double>>& Espectrum);
 void write_csv_opt(const string& filename, const vector<RowOpt>& rows);
 void write_csv_eps(const string& filename, const vector<RowInfid>& rows);
 
@@ -28,5 +30,17 @@ int plot_with_python(const vector<string>& csv_files,
                      const string& script,
                      const string& mode = "multi");
 
+int plot_with_python_E(const vector<string>& csv_files,
+                     const string& csv_Efile,
+                     const string& out_png,
+                     const string& py_exec,
+                     const string& script,
+                     const string& mode);
 
+int plot_Espectrum(const string& csv_file,
+                     const string& s_file,
+                     const string& out_png = "plot.png",
+                     const string& py_exec = "python3",
+                     const string& script  = "plot.py",
+                     const string& mode = "spectrum");
 #endif //MY_PROJECT_DATA_H

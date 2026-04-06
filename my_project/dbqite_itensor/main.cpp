@@ -140,29 +140,30 @@ void getSigma2(TwoSigmaSite& sigma2){
 
 void getChainN(ChainModel& chain){
 	// Params for Fidelity in time Algo
-    vector<double> s_step_vec = { 0.2, 0.25, 0.3, 0.125, 0.175, 0.275};
-    vector<string> s_step_vec_str = {"0.2Ch2", "0.25Ch2", "0.3Ch2", "0.125Ch2", "0.175Ch2", "0.275Ch2"};
+    vector<double> s_step_vec = { 0.2, 0.21, 0.22, 0.23, 0.242};//, 0.25, 0.255, 0.26, 0.265, 0.275};
+    vector<string> s_step_vec_str = {"0.2Ch2", "0.21Ch2", "0.22Ch2", "0.23Ch2", "0.242Ch2"};//, "0.25Ch2", "0.255Ch2", "0.26Ch2", "0.265Ch2", "0.275Ch2"};
 
     for (int i = 0; i < s_step_vec.size(); i++) {
         AlgoLoopParams loop_params2;
         loop_params2.s_step = s_step_vec[i];
         loop_params2.s_string = s_step_vec_str[i];
-        loop_params2.K = 200;
+        loop_params2.K = 300;
         loop_params2.infid_target = 1E-14;
         loop_params2.str_infid_target = "1E-14";
-        chain.basicModelLoop(loop_params2);
+        //chain.basicModelLoop(loop_params2);
     }
+    //plot_with_python_E({"data0.22Ch2.csv", "data0.23Ch2.csv", "data0.242Ch2.csv", "data0.25Ch2.csv", "data0.255Ch2.csv", "data0.26Ch2.csv", "data0.265Ch2.csv", "data0.275Ch2.csv"}, "Elevels4.csv", "plotCh42.png",  "python3", "plot.py", "multiE");
 
-    // Params for optimization for given epsilon
-    vector<double> e_step_vec = {1E-3, 1E-5, 1E-7, 1E-9, 1E-11, 1E-13};
-    vector<string> e_step_vec_str = {"1E-3Ch2", "1E-5Ch2", "1E-7Ch2", "1E-9Ch2", "1E-11Ch2", "1E-13Ch2"};
+   // Params for optimization for given epsilon
+    vector<double> e_step_vec = {1E-5, 1E-7, 1E-9, 1E-11};
+    vector<string> e_step_vec_str = {"1E-5Ch2", "1E-7Ch2", "1E-9Ch2", "1E-11Ch2", "1E-13Ch2"};
 
     for (int i = 0; i < e_step_vec.size(); i++) {
         AlgoOptParams opt_params2;
-        opt_params2.s_min = 0.05;
-        opt_params2.s_bin = 0.025;
+        opt_params2.s_min = 0.06;
+        opt_params2.s_bin = 0.005;
         opt_params2.s_N = 14;
-        opt_params2.K_max = 200;
+        opt_params2.K_max = 900;
         opt_params2.infid_target = e_step_vec[i];
         opt_params2.str_infid_target = e_step_vec_str[i];
         chain.optimizeStepsLoop(opt_params2);
@@ -175,24 +176,53 @@ void getChainN(ChainModel& chain){
         eps_params2.s_string = s_step_vec_str[i];
         eps_params2.K_max = 200;
         eps_params2.infid_min = 1E-2;
-        eps_params2.infid_N = 8;
-        chain.degradingInfidLoop(eps_params2);
+        eps_params2.infid_N = 9;
+        //chain.degradingInfidLoop(eps_params2);
     }
-    plot_with_python({"data0.2Ch2.csv", "data0.25Ch2.csv", "data0.3Ch2.csv", "data0.125Ch2.csv", "data0.175Ch2.csv", "data0.275Ch2.csv"}, "plotCh42.png", "python3", "plot.py");
-    plot_with_python({"data1E-3Ch2opt.csv", "data1E-5Ch2opt.csv", "data1E-7Ch2opt.csv", "data1E-9Ch2opt.csv", "data1E-11Ch2opt.csv", "data1E-13Ch2opt.csv"}, "plotOptiCh42.png", "python3", "plot.py", "opti");
-    plot_with_python({"data0.2Ch2eps.csv", "data0.25Ch2eps.csv", "data0.3Ch2eps.csv", "data0.125Ch2eps.csv", "data0.175Ch2eps.csv", "data0.275Ch2eps.csv"}, "plot_eps_Ch42.png", "python3", "plot.py", "infid_fit_trace");
+    //plot_with_python({"data0.2Ch2.csv", "data0.25Ch2.csv", "data0.3Ch2.csv", "data0.125Ch2.csv", "data0.175Ch2.csv", "data0.275Ch2.csv"}, "plotCh42.png",  "python3", "plot.py", "multi");
+    plot_with_python({ "data1E-5Ch2opt.csv", "data1E-7Ch2opt.csv", "data1E-9Ch2opt.csv", "data1E-11Ch2opt.csv"}, "plotOptiCh4255.png", "python3", "plot.py", "opti");
+    //plot_with_python({  "data0.2Ch2eps.csv", "data0.21Ch2eps.csv", "data0.22Ch2eps.csv", "data0.23Ch2eps.csv"}, "plot_eps_Ch425.png", "python3", "plot.py", "infid_fit_trace");
 
+}
+
+void scanSpectrum(){
+	string filename = "ExactEnergies3.txt";
+
+	vector<vector<double>> FullEnergies;
+	vector<double> g_vals;
+	double g_step = 0.05;
+	double g0 = 0.4;
+	for (int i = 0; i < 18; i++){
+		double g = g0 + i*g_step;
+		g_vals.push_back(g);
+		ChainModel chainN = ChainModel(g, 3, false);
+		vector<double> ei = chainN.ExactEnergies();
+		FullEnergies.push_back(ei);
+
+	}
+	write_csv_Espectrum(filename, g_vals, FullEnergies);
+	plot_Espectrum("ExactEnergies3.txt", "OptimumSteps3.txt", "E3spectrum_gscan.png", "python3", "plot.py" );
 }
 
 ///////////////////////// Main ////////////////////////////
 int main(){
     cout << fixed << setprecision(14);
+	//scanSpectrum();
+	///plot_Espectrum("ExactEnergies3.txt", "OptimumSteps3.txt", "E3spectrum_gscan.png", "python3", "plot.py" );
+	if(false){
+		ChainModel chainN = ChainModel(1.0, 3, false);
+		AlgoOptParams opt_params2 = {0.2, 0.05, 40, 300, 1E-11, "1E-11CGap3"};
+		chainN.optimizeStepsLoop(opt_params2);
+    	plot_with_python({ "data1E-11CGap3opt.csv"}, "plotGap3.png", "python3", "plot.py", "opti");
+	}
+
+
 
     // ------------ Generate new Data or Plot existing Data -------------
     bool Data1 = false;
     bool Data2 = false;
 	bool DataSig2 = false;
-	bool DataChain = true;
+	bool DataChain = false;
     bool Plot = false;
 
 	//Test of Principle with 2 Hamiltonians
@@ -212,7 +242,7 @@ int main(){
 		getSigma2(sigma2);
 	}
 	if (DataChain == true){
-		ChainModel chainN = ChainModel(1.0, 4, false);
+		ChainModel chainN = ChainModel(0.45, 3, false);
 		getChainN(chainN);
 	}
 

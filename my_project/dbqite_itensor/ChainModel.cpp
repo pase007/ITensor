@@ -38,10 +38,9 @@ ChainModel::ChainModel(double g, int N, bool PBC) {
     buildHamiltonian();
 
     // taget: ground state
-    pair<double, vector<ITensor>> gs = groundSpace2(1E-14);
-    E0_   = gs.first;
-    groundspace_ = gs.second;
+    tie(E0_, groundspace_, Energies_, currentSpace_) = groundSpace2(1E-14);
     checkGroundStateDegeneracy(1E-14);
+    write_csv_E("Elevels" + to_string(NrSites_) + ".csv", Energies_);
 
 }
 
@@ -86,7 +85,7 @@ void ChainModel::buildHamiltonian(){
                 link3 *= sigma_j.Id_s();
             }
         }
-        H_ += -3.0/(4.0*pow(g_,2)) * (link1 + link2 + link3);
+        H_ += -1.0/(1.0*pow(g_,2)) * (link1 + link2 + link3);
     }
     if (PBC_ == true) {
         ITensor link1 = ITensor(1.0);
@@ -123,9 +122,12 @@ void ChainModel::printSummary() const{
 
 
 //------------------------------------ Diagonalization: Groundstate and Energies ---------------------------------------
-pair<double, vector<ITensor>> ChainModel::groundSpace2(double tol) const{
+std::tuple<double, std::vector<ITensor>, std::vector<double>, std::vector<ITensor>>
+ChainModel::groundSpace2(double tol) const{
     ITensor D, V;
     diagHermitian(H_, V, D);
+
+    std::vector<double> Elevels;
 
     auto dinds = inds(D);
     if(length(dinds) != 2){
@@ -140,9 +142,21 @@ pair<double, vector<ITensor>> ChainModel::groundSpace2(double tol) const{
     }
 
     double Emin = std::numeric_limits<double>::infinity();
+
+    // First pass: collect energies and find ground-state energy
     for(int n = 1; n <= dim(d); ++n){
         double lam = real(eltC(D, d(n), dp(n)));
+        Elevels.push_back(lam);
         if(lam < Emin) Emin = lam;
+    }
+
+    // Second pass: find first excited energy
+    double E1 = std::numeric_limits<double>::infinity();
+    for(int n = 1; n <= dim(d); ++n){
+        double lam = Elevels.at(n-1);
+        if(lam > Emin + tol && lam < E1){
+            E1 = lam;
+        }
     }
 
     auto vinds = inds(V);
@@ -161,20 +175,27 @@ pair<double, vector<ITensor>> ChainModel::groundSpace2(double tol) const{
         itensor::error("groundSpace2: could not identify eigenvector index in V");
     }
 
-    vector<ITensor> gs_vecs;
+    std::vector<ITensor> gs_vecs;
+    std::vector<ITensor> es_vecs;
 
+    // Third pass: collect ground-state and first-excited-state vectors
     for(int n = 1; n <= dim(d); ++n){
-        double lam = real(eltC(D, d(n), dp(n)));
+        double lam = Elevels.at(n-1);
+
+        ITensor psi = V * setElt(u(n));
+        auto nrm = norm(psi);
+        if(nrm > 0.0) psi /= nrm;
 
         if(std::abs(lam - Emin) < tol){
-            ITensor psi = V * setElt(u(n));
-            auto nrm = norm(psi);
-            if(nrm > 0.0) psi /= nrm;
             gs_vecs.push_back(psi);
+        }else if(E1 < std::numeric_limits<double>::infinity() &&
+                std::abs(lam - E1) < tol){
+            es_vecs.push_back(psi);
+            //cout << "+1" << endl;
         }
     }
 
-    return {Emin, gs_vecs};
+    return {Emin, gs_vecs, Elevels, es_vecs};
 }
 
 void ChainModel::checkGroundStateDegeneracy(double tol) const{
@@ -220,21 +241,19 @@ void ChainModel::checkGroundStateDegeneracy(double tol) const{
             bool isGS = std::abs(lam - Emin) < tol;
             if(isGS) degeneracy++;
 
-            std::cout << "Eigenvalue " << n << " = " << lam;
-            if(isGS) std::cout << "   <-- GS";
-            std::cout << "\n";
+
 
             // Für die ersten paar oder für GS-Zustände drucken
-            if( isGS){
+            if( isGS || n > dim(d) - 5 || n <5){
                 ITensor psi = V * setElt(u(n));
                 auto nrm = norm(psi);
                 if(nrm > 0.0) psi /= nrm;
 
-                std::cout << "State " << n << ":\n";
-                std::cout << psi << "\n";
+                std::cout << "State " << n << " - E = " << lam << "\n";
+                //std::cout << psi << "\n";
             }
 
-            std::cout << "------------------------------------------\n";
+            //std::cout << "------------------------------------------\n";
         }
 
         std::cout << "Ground-state energy: " << Emin << "\n";
@@ -244,7 +263,37 @@ void ChainModel::checkGroundStateDegeneracy(double tol) const{
 
 
 
+vector<double> ChainModel::ExactEnergies() const{
+    ITensor D, V;
+    diagHermitian(H_, V, D);
 
+    vector<double> Elevels;
+
+    auto dinds = inds(D);
+    if(length(dinds) != 2){
+        itensor::error("groundSpace2: D does not have exactly 2 indices");
+    }
+
+    Index d  = dinds[0];
+    Index dp = dinds[1];
+
+    if(dim(d) != dim(dp)){
+        itensor::error("groundSpace2: eigenvalue indices of D have different dimensions");
+    }
+	double E0, E1;
+
+    // First pass: collect energies and find ground-state energy
+    for(int n = 1; n <= dim(d); ++n){
+        double lam = real(eltC(D, d(n), dp(n)));
+        if (n > dim(d) - 10 && dim(d) > 16) Elevels.push_back(lam);
+		if (n == dim(d)) E0 = lam;
+        if (n == dim(d)-1) E1 = lam;
+    }
+	cout << "Gap Delta = " << E1-E0 << "\n";
+	cout << Elevels[0] << "," << Elevels[0] << "\n";
+
+    return Elevels;
+}
 
 
 
@@ -262,8 +311,8 @@ void ChainModel::basicModelLoop(const AlgoLoopParams& params) const {
     //Data container
     vector<Row> rows;
     rows.reserve(K+1);
-    //cout << "norm psi\t\tk\tEnergy(<X>)\t\tInfidelity(|->)\n"; //"\t\tunitarity defect\n";
-    double Ek, Fk, IFk;
+    cout << "k\tEnergy(<X>)\t\tInfidelity(|->)\n"; //"\t\tunitarity defect\n";
+    double Var, Ek, Fk, IFk, F1k, IF1k;
 
     // Start U0 = Warm up
     ITensor U = U0_;
@@ -282,11 +331,14 @@ void ChainModel::basicModelLoop(const AlgoLoopParams& params) const {
 
         // Calculate Observables and save them
         Ek = expectation(psi, H_);
+        Var = expectation(psi, composeGateN(H_, H_, Iset_)) - pow(Ek,2);
         Fk = fidelityToSubspace(psi, groundspace_);
+        F1k = fidelityToSubspace(psi, currentSpace_);
         IFk = 1 - Fk;
+        IF1k = 1 - F1k;
         rows.push_back(Row{k, Ek, Fk});
 
-        //cout << k << "\t" << Ek << "\t" << IFk << "\n";
+        cout << k << "\t" << Ek << "\t" << IFk << "\t" << IF1k << "\t" << Var << "\n";
         if (IFk < infid_target) {
             //cout << "\nInfidelity of " << str_infid_target << " after " << k << " steps achieved!" << endl;
             break;
@@ -414,7 +466,7 @@ void ChainModel::optimizeStepsLoop(const AlgoOptParams& params) const {
     for (int j = 0; j <= s_N; j++) {
         double s_step = s_min + s_bin*j;
         double theta = sqrt(s_step);
-        //cout << s_step << "\t";
+        //cout << s_step << ",\t";
 
         // Start U0 = Warm up
         ITensor U = U0_;

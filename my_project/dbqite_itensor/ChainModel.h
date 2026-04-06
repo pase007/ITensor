@@ -13,6 +13,7 @@
 #include "OneSigmaSite.h"
 #include <iostream>
 #include <iomanip>
+#include <tuple>
 #include <cmath>
 #include <iomanip>
 #include <vector>
@@ -40,7 +41,9 @@ protected:
 
     // States of the system
     vector<ITensor> groundspace_;
+    vector<ITensor> currentSpace_;
     vector<double> Energies_;
+	vector<double> Espectrum_;
     double E0_;
 
     //Algorithm definitions
@@ -58,6 +61,7 @@ public:
     ITensor const& H() const { return H_; }
     int const& NrSites() const { return NrSites_; }
     double const& g() const { return g_; }
+    vector<double> const& getSpectrum() const { return Espectrum_; }
 
     ITensor const& phi() const { return phi_; }
 
@@ -66,8 +70,9 @@ public:
     void printSummary() const;
 
     void buildHamiltonian();
-    pair<double, vector<ITensor>> groundSpace2(double tol) const;
+    tuple<double, vector<ITensor>, vector<double>, vector<ITensor>> groundSpace2(double tol) const;
     void checkGroundStateDegeneracy(double tol) const;
+	vector<double> ExactEnergies() const;
 
     void basicModelLoop(const AlgoLoopParams& params) const;
     void optimizeStepsLoop(const AlgoOptParams& params) const;

@@ -46,7 +46,7 @@ public:
     virtual ~BaseModel() = default;
 
     // Getters
-    ITensor const& H() const { return H_; }
+    //ITensor const& H() const { return H_; }
     ITensor const& H0() const { return H0_; }
     ITensor const& j1() const { return j1_; }
     ITensor const& j2() const { return j2_; }
@@ -54,7 +54,7 @@ public:
 
     Index const& s() const { return s_; }
     ITensor const& Id_s() const { return Id_s_; }
-    ITensor const& phi() const { return phi_; }
+    //ITensor const& phi() const { return phi_; }
     ITensor const& ket0() const { return ket0_; }
 
     // Shared methods

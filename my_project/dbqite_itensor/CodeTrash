@@ -71,3 +71,39 @@ void getDataSigma1(OneSigmaSite& sigma1){
 		sigma1.degradingInfidLoop(eps_params);
 	}
 }
+
+Basemodel:
+
+void ChainModelMPS::buildProductStateMPS(){
+    vector<Index> templinks;
+    for(int i = 1; i < NrSites_; ++i) {
+        templinks.push_back(Index(5, "Link,l=" + to_string(i)));
+    }
+    IndexSet links(templinks);
+
+    p0_ = MPS(NrSites_);
+
+    // Site 1: (right_bond, s)  — put bond FIRST
+    {
+        auto s = sitesVec_(1);
+        ITensor A(links[0], s);
+        A.set(links[0](1), s(1), 1.0);
+        p0_.setA(1, A);
+    }
+
+    // Middle sites: (left_bond, right_bond, s)
+    for(int i = 2; i < NrSites_; ++i) {
+        auto s = sitesVec_(i);
+        ITensor A(links[i-2], links[i-1], s);
+        A.set(links[i-2](1), links[i-1](1), s(1), 1.0);
+        p0_.setA(i, A);
+    }
+
+    // Last site: (left_bond, s)
+    {
+        auto s = sitesVec_(NrSites_);
+        ITensor A(links[NrSites_-2], s);
+        A.set(links[NrSites_-2](1), s(1), 1.0);
+        p0_.setA(NrSites_, A);
+    }
+}

@@ -4,7 +4,7 @@
 #include "OneSigmaSite.h"
 
 OneSigmaSite::OneSigmaSite(double g)
-    : BaseModel(4, "Qutit"){
+    : BaseModel(4, "Site"){
     g_ = g;
     Id_s_ = diagOp4(s_, 1.0, 1.0, 1.0, 1.0);
 

@@ -31,14 +31,15 @@ ITensor opFromMatrix4(Index const& s, array<cplx,16> const& M){
     if(dim(s) != 4)
         throw runtime_error("opFromMatrix4 requires Index of dimension 4");
 
-    auto sP = prime(s);
-    ITensor Op(dag(s), sP);
+    auto sp = prime(s);
+    auto sd = dag(s);    // Store this once!
 
-    // Row-major: M[4*r + c]
+    ITensor Op(sp, sd);
+
     for(int r = 1; r <= 4; ++r)
         for(int c = 1; c <= 4; ++c)
         {
-            Op.set(dag(s)(r), sP(c), M[4*(r-1) + (c-1)]);
+            Op.set(sp(r), sd(c), M[4*(r-1) + (c-1)]);  // Use stored sd
         }
 
     return Op;
@@ -95,11 +96,12 @@ ITensor diagOp4(Index const& s, double d1, double d2, double d3, double d4){
 
 ITensor opFromArray2(Index const& s, cplx a00, cplx a01, cplx a10, cplx a11){
     auto sp = prime(s);
-    ITensor U(sp, s);
-    U.set(sp(1), s(1), a00);
-    U.set(sp(1), s(2), a01);
-    U.set(sp(2), s(1), a10);
-    U.set(sp(2), s(2), a11);
+    auto sd = dag(s);    // Store once
+    ITensor U(sp, sd);
+    U.set(sp(1), sd(1), a00);
+    U.set(sp(1), sd(2), a01);
+    U.set(sp(2), sd(1), a10);
+    U.set(sp(2), sd(2), a11);
     return U;
 }
 

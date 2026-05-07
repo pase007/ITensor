@@ -50,9 +50,6 @@ protected:
     ITensor p0_;
     ITensor U0_;
 
-
-
-
 public:
     ChainModel(double g, int N, bool PBC);
 
@@ -62,20 +59,22 @@ public:
     int const& NrSites() const { return NrSites_; }
     double const& g() const { return g_; }
     vector<double> const& getSpectrum() const { return Espectrum_; }
-
     ITensor const& phi() const { return phi_; }
 
     // Shared methods
     void checkHamiltonian() const;
     void printSummary() const;
 
+	// Hamiltonian and Groundstate
     void buildHamiltonian();
     tuple<double, vector<ITensor>, vector<double>, vector<ITensor>> groundSpace2(double tol) const;
     void checkGroundStateDegeneracy(double tol) const;
 	vector<double> ExactEnergies() const;
 
+	// Experiment algorithm loops
     void basicModelLoop(const AlgoLoopParams& params) const;
     void optimizeStepsLoop(const AlgoOptParams& params) const;
+	void optimizeStepsLoopVec(const AlgoOptParamsVec& params) const;
     void degradingInfidLoop(const AlgoInfidParams& params) const;
 };
 

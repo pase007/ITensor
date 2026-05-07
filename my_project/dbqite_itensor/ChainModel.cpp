@@ -24,7 +24,7 @@ ChainModel::ChainModel(double g, int N, bool PBC) {
         models_.push_back(sigma_i);
 
         // Warm up Gate U_0 and trivial state |00...>
-        U0_ *= hadamard4(s_i);
+        U0_ *=  diagOp4(s_i, 1.0, 1.0, 1.0, 1.0);//hadamard4(s_i);//
         ITensor p_i = ITensor(s_i);
         p_i.set(s_i(1), 1.0);
         p_i.set(s_i(2), 0.0);
@@ -43,7 +43,6 @@ ChainModel::ChainModel(double g, int N, bool PBC) {
     write_csv_E("Elevels" + to_string(NrSites_) + ".csv", Energies_);
 
 }
-
 
 
 
@@ -85,7 +84,7 @@ void ChainModel::buildHamiltonian(){
                 link3 *= sigma_j.Id_s();
             }
         }
-        H_ += -1.0/(1.0*pow(g_,2)) * (link1 + link2 + link3);
+        H_ += -3.0/(4.0*pow(g_,2)) * (link1 + link2 + link3);
     }
     if (PBC_ == true) {
         ITensor link1 = ITensor(1.0);
@@ -285,12 +284,12 @@ vector<double> ChainModel::ExactEnergies() const{
     // First pass: collect energies and find ground-state energy
     for(int n = 1; n <= dim(d); ++n){
         double lam = real(eltC(D, d(n), dp(n)));
-        if (n > dim(d) - 10 && dim(d) > 16) Elevels.push_back(lam);
+        if (n > dim(d) - 7 && dim(d) > 10) Elevels.push_back(lam);
 		if (n == dim(d)) E0 = lam;
         if (n == dim(d)-1) E1 = lam;
     }
 	cout << "Gap Delta = " << E1-E0 << "\n";
-	cout << Elevels[0] << "," << Elevels[0] << "\n";
+	cout << Elevels[1] << "," << Elevels[0] << "\n";
 
     return Elevels;
 }
@@ -311,7 +310,7 @@ void ChainModel::basicModelLoop(const AlgoLoopParams& params) const {
     //Data container
     vector<Row> rows;
     rows.reserve(K+1);
-    cout << "k\tEnergy(<X>)\t\tInfidelity(|->)\n"; //"\t\tunitarity defect\n";
+    //cout << "k\tEnergy(<X>)\t\tInfidelity(|->)\n"; //"\t\tunitarity defect\n";
     double Var, Ek, Fk, IFk, F1k, IF1k;
 
     // Start U0 = Warm up
@@ -340,7 +339,7 @@ void ChainModel::basicModelLoop(const AlgoLoopParams& params) const {
 
         cout << k << "\t" << Ek << "\t" << IFk << "\t" << IF1k << "\t" << Var << "\n";
         if (IFk < infid_target) {
-            //cout << "\nInfidelity of " << str_infid_target << " after " << k << " steps achieved!" << endl;
+            cout << "\nInfidelity of " << str_infid_target << " after " << k << " steps achieved!" << endl;
             break;
         }
         //cout << "--------------------------------- I Am Here ----------------------------------" << endl;
@@ -365,7 +364,6 @@ void ChainModel::basicModelLoop(const AlgoLoopParams& params) const {
     }
     //write_csv("data4.csv", rows);
     write_csv("data" + s_string + ".csv", rows);
-
 }
 
 void ChainModel::degradingInfidLoop(const AlgoInfidParams& params) const {
@@ -379,8 +377,12 @@ void ChainModel::degradingInfidLoop(const AlgoInfidParams& params) const {
 
     // Data Container
     vector<RowInfid> rows;
-    rows.reserve(infid_N+1);
-    double Fk, IFk;
+    rows.reserve(infid_N);
+    double Fk;
+	vector<double> infids;
+	infids.reserve(infid_N);
+	vector<double> data_infids_vec;
+	data_infids_vec.reserve(K_max);
     //cout << "current infid\tsteps k" << endl;
 
     // Contruct Unitaries A and R
@@ -388,63 +390,161 @@ void ChainModel::degradingInfidLoop(const AlgoInfidParams& params) const {
     ITensor Ad = adjointGateN(A);
     ITensor R0 = phaseOnStateN(p0_, Iset_, theta);
 
+	// Start U0 = Warm up
+    ITensor U = U0_;
+
     for (int ek = 0; ek < infid_N; ek++) {
-        double infid_step;
         if (ek % 2 == 0) {
-            infid_step = infid_min * pow(10.0, -ek);
+            infids.push_back(infid_min * pow(10.0, -ek));
+
         } else {
-            infid_step = infid_min * pow(10.0, -ek);
+            infids.push_back(infid_min * pow(10.0, -ek));
         }
         //cout << infid_step << "\n";
+	}
+
+
+    for(int k = 0; k <= K_max; k++) {
+    	// Build ITensor gate from U and apply to phi(k-1)
+        ITensor psi = applyGate(U, p0_);
+
+        // Calculate Observables and save them
+        Fk = fidelityToSubspace(psi, groundspace_);
+        data_infids_vec.push_back(1-Fk);
+
+        // DB-QITE recursion: U_{k+1} = A * U * Rk * U' * A' * U
+        ITensor Ud = adjointGateN(U);
+        ITensor Ui = U;
+
+        Ui = composeGateN(A, U, Iset_);
+        Ui = composeGateN(Ui, R0, Iset_);
+        Ui = composeGateN(Ui, Ud, Iset_);
+        Ui = composeGateN(Ui, Ad, Iset_);
+        //cout << "-U: " << unitary_DefectN(Ui, s12_) << "\n";
+        Ui = composeGateN(Ui, U, Iset_);
+
+        //Next step
+        if (unitary_DefectN(Ui, Iset_) > 1E-12) {
+        	//cout << "U: " << unitary_Defect(Ui, s_comb);
+        	//cout << " -- start Unitarization -- ";
+        	Ui = reunitarize_polar_gateN(Ui, Iset_);
+        	//cout << "Unitarization complete -- ";
+        	//cout << "U: " << unitary_Defect(Ui, s_comb) << "\n";
+        	U = Ui;
+        }else{
+        	U = Ui;
+        }
+    }
+
+	int k_step;
+	for (int i = 0; i < infid_N; i++) {
+		int k_i = 0;
+		double e_goal = infids[i];
+
+		for (int k=k_i; k <= K_max; k++) {
+			k_step = K_max+1;
+			double IFk = data_infids_vec[k];
+			if (IFk <= e_goal) {
+                k_step = k;
+				rows.push_back(RowInfid{e_goal, k, IFk});
+				break;
+			}
+		}
+		if (k_step > K_max){
+			rows.push_back(RowInfid{e_goal, K_max, data_infids_vec[K_max-1]});
+		}
+	}
+
+    write_csv_eps("data" + s_string + "eps.csv", rows);
+
+}
+
+
+void ChainModel::optimizeStepsLoopVec(const AlgoOptParamsVec& params) const {
+    const double s_min = params.s_min;
+    const double s_bin = params.s_bin;
+    const int s_N = params.s_N;
+    const int K_max = params.K_max;
+    const vector <double> infid_target = params.infid_target;
+    const vector <string> str_infid_target = params.str_infid_target;
+	const int infid_N = infid_target.size();
+
+
+    // Data Container
+    vector<vector<RowOpt>> rowsArr;
+    rowsArr.reserve(infid_N);
+	vector<double> step_vec;
+    //cout << "current s\tsteps k" << endl;
+
+
+    for (int j = 0; j <= s_N; j++) {
+
+    	vector<double> IFk;
+		IFk.reserve(s_N+1);
+
+        double s_step = s_min + s_bin*j;
+		cout << "step = " << s_step << "\n";
+		step_vec.push_back(s_step);
+        double theta = sqrt(s_step);
+        //cout << s_step << ",\t";
 
         // Start U0 = Warm up
         ITensor U = U0_;
+
+        // Contruct Unitaries A and R
+        ITensor A  = exp_i_theta_H(H_, theta);
+        ITensor Ad = adjointGateN(A);
+        ITensor R0 = phaseOnStateN(p0_, Iset_, theta);
+
 
         for(int k = 0; k <= K_max; k++) {
             // Build ITensor gate from U and apply to phi(k-1)
             ITensor psi = applyGate(U, p0_);
 
             // Calculate Observables and save them
-            Fk = fidelityToSubspace(psi, groundspace_);
-            IFk = 1 - Fk;
+			IFk.push_back(1 - fidelityToSubspace(psi, groundspace_));
+			//cout << IFk[j][k] << "\n";
 
-            if (IFk > infid_step) {
-                if (k<K_max) {
-                    // DB-QITE recursion: U_{k+1} = A * U * Rk * U' * A' * U
-                    ITensor Ud = adjointGateN(U);
-                    ITensor Ui = U;
 
-                    Ui = composeGateN(A, U, Iset_);
-                    Ui = composeGateN(Ui, R0, Iset_);
-                    Ui = composeGateN(Ui, Ud, Iset_);
-                    Ui = composeGateN(Ui, Ad, Iset_);
-                    //cout << "-U: " << unitary_DefectN(Ui, s12_) << "\n";
-                    Ui = composeGateN(Ui, U, Iset_);
+            // DB-QITE recursion: U_{k+1} = A * U * Rk * U' * A' * U
+            ITensor Ud = adjointGateN(U);
+            ITensor Ui = U;
 
-                    //Next step
-                    if (unitary_DefectN(Ui, Iset_) > 1E-12) {
-                        //cout << "U: " << unitary_Defect(Ui, s_comb);
-                        //cout << " -- start Unitarization -- ";
-                        Ui = reunitarize_polar_gateN(Ui, Iset_);
-                        //cout << "Unitarization complete -- ";
-                        //cout << "U: " << unitary_Defect(Ui, s_comb) << "\n";
-                        U = Ui;
-                    }else{
-                        U = Ui;
-                    }
+            Ui = composeGateN(A, U, Iset_);
+            Ui = composeGateN(Ui, R0, Iset_);
+            Ui = composeGateN(Ui, Ud, Iset_);
+            Ui = composeGateN(Ui, Ad, Iset_);
+            //cout << "-U: " << unitary_DefectN(Ui, s12_) << "\n";
+            Ui = composeGateN(Ui, U, Iset_);
 
-                }else if (k == K_max) {
-                    //cout << k << endl;
-                    rows.push_back(RowInfid{infid_step, k, IFk});
-                }
+            //Next step
+            if (unitary_DefectN(Ui, Iset_) > 1E-10) {
+                 Ui = reunitarize_polar_gateN(Ui, Iset_);
+                 U = Ui;
             }else{
-                //cout << k << endl;
-                rows.push_back(RowInfid{infid_step, k, IFk});
-                break;
+                 U = Ui;
             }
-        }
-        write_csv_eps("data" + s_string + "eps.csv", rows);
-    }
+		}
+
+		int k_step = 0;
+		for (int i = 0; i<infid_N; i++) {
+			for (int k = k_step; k <= K_max; k++) {
+				k_step = K_max+1;
+				if(IFk[k] < infid_target[i]){
+					rowsArr[i].push_back(RowOpt{step_vec[j], k, IFk[k]});
+					k_step = k;
+					break;
+				}
+			}
+			if (k_step > K_max){
+				rowsArr[i].push_back(RowOpt{step_vec[j], K_max, IFk[K_max-1]});
+            }
+		}
+	}
+
+	for (int i = 0; i<infid_N; i++) {
+		write_csv_opt("data" + str_infid_target[i] + "opt.csv", rowsArr[i]);
+	}
 }
 
 
@@ -518,3 +618,4 @@ void ChainModel::optimizeStepsLoop(const AlgoOptParams& params) const {
     }
     write_csv_opt("data" + str_infid_target + "opt.csv", rows);
 }
+

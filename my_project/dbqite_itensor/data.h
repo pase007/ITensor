@@ -43,4 +43,10 @@ int plot_Espectrum(const string& csv_file,
                      const string& py_exec = "python3",
                      const string& script  = "plot.py",
                      const string& mode = "spectrum");
+
+int plot_Espectrum_Pert(const string& csv_file,
+                     const string& out_png = "plot.png",
+                     const string& py_exec = "python3",
+                     const string& script  = "plot.py",
+                     const string& mode = "spectrumPert");
 #endif //MY_PROJECT_DATA_H

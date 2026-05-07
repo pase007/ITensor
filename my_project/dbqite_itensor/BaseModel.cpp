@@ -3,20 +3,18 @@
 //
 #include "BaseModel.h"
 void BaseModel::checkHamiltonian() const{
-    if(!(hasInds(H_, prime(s_)) && hasInds(H_, s_) && order(H_) == 2)){
-        cout << inds(H_) << std::endl;
+    if(!(hasInds(H0_, prime(s_)) && hasInds(H0_, s_) && order(H0_) == 2)){
+        cout << inds(H0_) << std::endl;
         itensor::error("H does not have indices (prime(s), s)");
     }
 }
 
 void BaseModel::printSummary() const{
     cout << "Site index: " << s_ << "\n";
-    cout << "H = " << H_ << "\n";
+    cout << "H = " << H0_ << "\n";
     cout << "phi = " << phi_ << "\n";
     cout << "ket0 = " << ket0_ << "\n";
 }
-
-
 void BaseModel::basicModelLoop(const AlgoLoopParams& params) const {
     // Parameters
     const double s_step = params.s_step;
@@ -242,4 +240,5 @@ void BaseModel::optimizeStepsLoop(const AlgoOptParams& params) const {
         }
     }
     write_csv_opt("data" + str_infid_target + "opt.csv", rows);
+
 }

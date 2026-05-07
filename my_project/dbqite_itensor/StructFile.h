@@ -28,6 +28,15 @@ struct AlgoOptParams{
     string str_infid_target;
 };
 
+struct AlgoOptParamsVec{
+    double s_min;
+    double s_bin;
+    double s_N;
+    int K_max;
+    vector <double> infid_target;
+    vector <string> str_infid_target;
+};
+
 struct AlgoInfidParams{
     double s_step;
     string s_string;

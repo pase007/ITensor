@@ -36,4 +36,5 @@ ITensor linearCombination4(Index const& s, vector<PauliTerm> const& terms);
 
 array<cplx,4> pauli2(char which);
 array<cplx,16> kron2x2(array<cplx,4> const& A, array<cplx,4> const& B);
+
 #endif //MY_PROJECT_BUILDINGHAMILTONIANS_H

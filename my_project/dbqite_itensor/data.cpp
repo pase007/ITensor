@@ -169,7 +169,7 @@ int plot_with_python_E(const vector<string>& csv_files,
     cmd << q(py_exec) << " " << q(script) << " " << mode << " " << q(plot_dir + out_png) << " " << q(plot_dirE + out_png) << " " << q(data_dir + csv_Efile);
 
     for(const auto& f : csv_files)
-        cmd << " " << q(data_dir + f);
+        cmd << " " << q(data_dir + "data" + f + ".csv");
 
     cout << "\n[plot] Running: " << cmd.str() << "\n";
     int rc = system(cmd.str().c_str());
@@ -197,6 +197,33 @@ int plot_Espectrum(const string& csv_file,
 
     string cmd =
         q(py_exec) + " " + q(script) + " " + mode + " " + q(plot_dir + out_png) + " " + q(data_dir + csv_file) + " " + q(data_dir + s_file);
+
+    cout << "\n[plot] Running: " << cmd << "\n";
+    int rc = system(cmd.c_str());
+    if(rc != 0){
+        cerr << "[plot] Python plotting failed (exit code " << rc << ")\n";
+    }
+    return rc;
+}
+
+int plot_Espectrum_Pert(const string& csv_file,
+                     const string& out_png,
+                     const string& py_exec,
+                     const string& script,
+                     const string& mode){
+    // Quote arguments to survive spaces in paths.
+    auto q = [](const string& s){
+        ostringstream os;
+        os << "\"";
+        for(char c : s) { if(c == '"') os << '\\'; os << c; }
+        os << "\"";
+        return os.str();
+    };
+    const string data_dir = "./Data/";
+    const string plot_dir ="./Plots/";
+
+    string cmd =
+        q(py_exec) + " " + q(script) + " " + mode + " " + q(plot_dir + out_png) + " " + q(data_dir  + csv_file);
 
     cout << "\n[plot] Running: " << cmd << "\n";
     int rc = system(cmd.c_str());

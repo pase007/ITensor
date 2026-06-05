@@ -262,7 +262,7 @@ void ChainModel::checkGroundStateDegeneracy(double tol) const{
 
 
 
-vector<double> ChainModel::ExactEnergies() const{
+vector<double> ChainModel::ExactEnergies(){
     ITensor D, V;
     diagHermitian(H_, V, D);
 
@@ -288,7 +288,10 @@ vector<double> ChainModel::ExactEnergies() const{
 		if (n == dim(d)) E0 = lam;
         if (n == dim(d)-1) E1 = lam;
     }
-	cout << "Gap Delta = " << E1-E0 << "\n";
+	E1_ = E1;
+	E0_ = E0;
+	gap_ = E1-E0;
+	cout << "Gap Delta = " << gap_ << "\n";
 	cout << Elevels[1] << "," << Elevels[0] << "\n";
 
     return Elevels;

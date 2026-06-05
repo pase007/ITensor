@@ -14,6 +14,8 @@ using namespace std;
 void write_csv(const string& filename, const vector<Row>& rows);
 void write_csv_E(const string& filename, const vector<double>& Elevels);
 void write_csv_Espectrum(const string& filename, const vector<double> g_vals, const vector<vector<double>>& Espectrum);
+void write_csv_EspectrumGap(const string& filename, const vector<double> g_vals, const vector<EnergyAnalysis>& Espectrum);
+void write_csv_gapConvergence(const string& filename, const vector<double>& g_vals, const vector<int> N_vals, const vector<vector<EnergyAnalysis>>& Espectrum);
 void write_csv_opt(const string& filename, const vector<RowOpt>& rows);
 void write_csv_eps(const string& filename, const vector<RowInfid>& rows);
 
@@ -49,4 +51,10 @@ int plot_Espectrum_Pert(const string& csv_file,
                      const string& py_exec = "python3",
                      const string& script  = "plot.py",
                      const string& mode = "spectrumPert");
+
+int plot_Espectrum_gap(const string& csv_file,
+                     const string& out_png = "plot.png",
+                     const string& py_exec = "python3",
+                     const string& script  = "plot.py",
+                     const string& mode = "spectrumEgap");
 #endif //MY_PROJECT_DATA_H

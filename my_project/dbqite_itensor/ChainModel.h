@@ -45,6 +45,8 @@ protected:
     vector<double> Energies_;
 	vector<double> Espectrum_;
     double E0_;
+	double E1_;
+	double gap_;
 
     //Algorithm definitions
     ITensor p0_;
@@ -61,6 +63,10 @@ public:
     vector<double> const& getSpectrum() const { return Espectrum_; }
     ITensor const& phi() const { return phi_; }
 
+	double const& E0() const { return E0_; }
+	double const& E1() const { return E1_; }
+	double const& gap() const { return gap_; }
+
     // Shared methods
     void checkHamiltonian() const;
     void printSummary() const;
@@ -69,7 +75,7 @@ public:
     void buildHamiltonian();
     tuple<double, vector<ITensor>, vector<double>, vector<ITensor>> groundSpace2(double tol) const;
     void checkGroundStateDegeneracy(double tol) const;
-	vector<double> ExactEnergies() const;
+	vector<double> ExactEnergies();
 
 	// Experiment algorithm loops
     void basicModelLoop(const AlgoLoopParams& params) const;

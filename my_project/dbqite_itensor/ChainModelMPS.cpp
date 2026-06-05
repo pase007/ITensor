@@ -1,4 +1,7 @@
 #include "ChainModelMPS.h"
+#include <future>
+#include <limits>
+#include <utility>
 
 
 using namespace itensor;
@@ -158,6 +161,15 @@ MPS ChainModelMPS::applyUdag(int k, MPS psi, vector<double> const& theta_history
     return psi;
 }
 
+MPS ChainModelMPS::evolveOneStep(MPS psi, int current_level, double theta_step, vector<double> const& theta_history) const{
+    psi = applyAd(psi, theta_step);
+    psi = applyUdag(current_level, psi, theta_history);
+    psi = applyR0(psi, theta_step);
+    psi = applyU(current_level, psi, theta_history);
+    psi = applyA(psi, theta_step);
+    return psi;
+}
+
 
 
 // ----------------------------------- DMRG for Groundstate ---------------------------------------
@@ -172,7 +184,7 @@ double ChainModelMPS::groundStateDMRG(int nsweeps, int maxdim_last, double cutof
     auto [energy, psiGS] = dmrg(H_, psi, sweeps, {"Silent", quiet});
 
     E0_ = energy;
-    groundstate_ = psiGS;
+    groundstate_ = std::move(psiGS);
     groundstate_.normalize();
 
     return E0_;
@@ -197,7 +209,7 @@ void ChainModelMPS::basicModelLoop(const AlgoLoopParams& params) const {
     rows.reserve(K+1);
     vector<double> theta_history;
     theta_history.reserve(K);
-    double schedule_factor = 0.85;
+    double schedule_factor = params.schedule_factor;
     double Var, Ek, Fk, IFk;
     double nrm;
 
@@ -231,14 +243,154 @@ void ChainModelMPS::basicModelLoop(const AlgoLoopParams& params) const {
         // Then start doing the evolution
         double shed = theta * pow(sqrt(schedule_factor), k-1);
         theta_history.push_back(shed);
-        MPS psiNext = psi;
-        psiNext = applyAd(psiNext, shed);
-        psiNext = applyUdag(k-1, psiNext, theta_history);
-        psiNext = applyR0(psiNext, shed);
-        psiNext = applyU(k-1, psiNext, theta_history);
-        psiNext = applyA(psiNext, shed);
-        psi = psiNext;
+        psi = evolveOneStep(psi, k-1, shed, theta_history);
     }
     // write data
+    write_csv("data" + s_string + ".csv", rows);
+}
+
+void ChainModelMPS::adaptiveSModelLoop(const AlgoLoopParams& params) const {
+    const double s_step = params.s_step;
+    const string s_string = params.s_string;
+    const int K = params.K;
+    const double infid_target = params.infid_target;
+    const string str_infid_target = params.str_infid_target;
+    cout << "Adaptive initial s = " << s_step << "\n";
+
+    vector<Row> rows;
+    rows.reserve(K+1);
+    vector<double> theta_history;
+    theta_history.reserve(K);
+    double current_s = s_step;
+
+    struct CandidateResult {
+        bool stable;
+        double s;
+        double theta;
+        double energy;
+        double norm;
+        MPS psi;
+    };
+    auto evaluateCandidates = [&](vector<double> const& candidates,
+                                  MPS const& current_psi,
+                                  int current_level,
+                                  vector<double> const& current_history,
+                                  double max_s) {
+        vector<std::future<CandidateResult>> trials;
+        trials.reserve(candidates.size());
+        for (double candidate_s : candidates) {
+            if (candidate_s <= 0.0) continue;
+            if (candidate_s > max_s) continue;
+
+            trials.push_back(std::async(std::launch::async, [this, candidate_s, current_history, current_psi, current_level]() {
+                double candidate_theta = sqrt(candidate_s);
+                vector<double> trial_history = current_history;
+                trial_history.push_back(candidate_theta);
+
+                MPS trial_psi = evolveOneStep(current_psi, current_level, candidate_theta, trial_history);
+                double trial_norm = real(innerC(trial_psi, trial_psi));
+                if (!std::isfinite(trial_norm) || trial_norm > 1.5) {
+                    return CandidateResult{false, candidate_s, candidate_theta,
+                                           std::numeric_limits<double>::infinity(),
+                                           trial_norm, std::move(trial_psi)};
+                }
+
+                double trial_energy = real(innerC(trial_psi, H_, trial_psi));
+                return CandidateResult{true, candidate_s, candidate_theta,
+                                       trial_energy, trial_norm, std::move(trial_psi)};
+            }));
+        }
+
+        bool found_candidate = false;
+        double best_energy = std::numeric_limits<double>::infinity();
+        CandidateResult best_result{false, 0.0, 0.0, best_energy, 0.0, MPS()};
+        for (auto& trial : trials) {
+            CandidateResult result = trial.get();
+            if (!result.stable) continue;
+            if (result.energy < best_energy) {
+                found_candidate = true;
+                best_energy = result.energy;
+                best_result = std::move(result);
+            }
+        }
+
+        if (!found_candidate) {
+            return CandidateResult{false, 0.0, 0.0,
+                                   std::numeric_limits<double>::infinity(),
+                                   0.0, MPS()};
+        }
+        return best_result;
+    };
+
+    MPS psi = applyU0(p0_);
+
+    cout << "ground norm = " << real(innerC(groundstate_, groundstate_)) << "\n";
+    cout << "k\tEnergy(<X>)\t\tVariance(H)\t\tInfidelity(|->)\t\tNorm(psi)\t\tmaxBondDim(psi)\n";
+    for (int k = 1; k <= K; ++k) {
+        double Ek = real(innerC(psi, H_, psi));
+        double Var = real(innerC(psi, H_, H_, psi)) - Ek*Ek;
+        double Fk = norm(innerC(groundstate_, psi));
+        double IFk = 1 - Fk;
+        double nrm = real(innerC(psi,psi));
+        if (nrm > 1.5) {
+            cout << "Norm exploded! nrm(psi) = " << nrm << "\n";
+            break;
+        }
+        rows.push_back(Row{k-1, Ek, Fk});
+        cout << k-1 << "\t" << Ek << "\t" << Var << "\t" << IFk << "\t" << nrm << "\t" << maxLinkDim(psi) << "\n";
+
+        if (IFk < infid_target) {
+            cout << "\nInfidelity of " << str_infid_target << " after " << k << " steps achieved!" << endl;
+            break;
+        }
+        if (k==K) break;
+
+        if (k == 1) {
+            double initial_theta = sqrt(s_step);
+            theta_history.push_back(initial_theta);
+            cout << "initial s_0 = " << s_step
+                 << " (theta = " << initial_theta << ")\n";
+            psi = evolveOneStep(psi, k-1, initial_theta, theta_history);
+            continue;
+        }
+
+        vector<double> candidates = params.s_candidates;
+        if (candidates.empty()) {
+            candidates = {0.5*s_step, 0.6*s_step, 0.7*current_s, 0.8*current_s, 0.9*current_s, current_s};
+        }
+
+        CandidateResult coarse_result = evaluateCandidates(candidates, psi, k-1, theta_history, current_s);
+        if (!coarse_result.stable) {
+            cout << "No stable adaptive s candidate found at k = " << k << "\n";
+            break;
+        }
+
+        double coarse_s = coarse_result.s;
+        CandidateResult best_result;
+        if (params.refine_s) {
+            vector<double> refine_candidates = {0.8*coarse_s, 0.9*coarse_s, coarse_s,
+                                                1.1*coarse_s, 1.2*coarse_s};
+            CandidateResult refine_result = evaluateCandidates(refine_candidates, psi, k-1, theta_history, current_s);
+            if (refine_result.stable) {
+                best_result = std::move(refine_result);
+            } else {
+                best_result = std::move(coarse_result);
+            }
+        } else {
+            best_result = std::move(coarse_result);
+        }
+
+        cout << "adaptive s_" << k-1 << " = " << best_result.s
+             << " (theta = " << best_result.theta
+             << ", trial E = " << best_result.energy
+             << ", dE = " << best_result.energy - Ek
+             << ", coarse s = " << coarse_s
+             << ", refined = " << (params.refine_s ? "yes" : "no") << ")\n";
+
+        theta_history.push_back(best_result.theta);
+        current_s = best_result.s;
+        psi = std::move(best_result.psi);
+    }
+
     write_csv("data" + s_string + ".csv", rows);
 }

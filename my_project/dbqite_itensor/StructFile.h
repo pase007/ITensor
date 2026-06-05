@@ -7,6 +7,7 @@
 #include "itensor/all.h"
 #include <iostream>
 #include <iomanip>
+#include <limits>
 using namespace std;
 using cplx = complex<double>;
 
@@ -17,6 +18,9 @@ struct AlgoLoopParams{
     int K;
     double infid_target;
     string str_infid_target;
+    double schedule_factor = 1.0;
+    vector<double> s_candidates = {};
+    bool refine_s = false;
 };
 
 struct AlgoOptParams{
@@ -71,6 +75,14 @@ struct RowInfid {
     double infid_step;
     int k;
     double infidelity;
+};
+
+struct EnergyAnalysis {
+    double E0;
+    double E1;
+    double gap;
+    double var0 = std::numeric_limits<double>::quiet_NaN();
+    double var1 = std::numeric_limits<double>::quiet_NaN();
 };
 
 

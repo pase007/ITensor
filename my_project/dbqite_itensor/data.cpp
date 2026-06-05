@@ -54,7 +54,61 @@ void write_csv_Espectrum(const string& filename, const vector<double> g_vals, co
     	}
 		out << "\n";
 	}
+}
 
+void write_csv_EspectrumGap(const string& filename, const vector<double> g_vals, const vector<EnergyAnalysis>& Espectrum){
+    const string data_dir = "./Data/";
+    ofstream out(data_dir + filename);
+    if(!out){
+        throw runtime_error("Could not open file for writing: " + filename);
+    }
+    out << "g,E0,E1,gap,var0,var1\n";
+    out << setprecision(14); // keep good numeric precision
+    for (int i = 0; i < g_vals.size(); ++i) {
+        const auto& E = Espectrum.at(i);
+        out << g_vals.at(i) << ","
+            << E.E0 << ","
+            << E.E1 << ","
+            << E.gap << ","
+            << E.var0 << ","
+            << E.var1 << "\n";
+    }
+}
+
+void write_csv_gapConvergence(const string& filename, const vector<double>& g_vals, const vector<int> N_vals, const vector<vector<EnergyAnalysis>>& Espectrum){
+    const string data_dir = "./Data/";
+    ofstream out(data_dir + filename);
+    if(!out){
+        throw runtime_error("Could not open file for writing: " + filename);
+    }
+    out << "g,N,E0,E1,gap\n";
+    out << setprecision(14); // keep good numeric precision
+	for (int i = 0; i < g_vals.size()-1; i++) {
+    	out << g_vals[i] << ",";
+	}
+	out << g_vals.back() << "\n";
+
+	// --- ADDED variable-length gap convergence format ---
+	// Row 2 is now: N_start,Nmax_for_g0,Nmax_for_g1,...
+	// This allows each g curve to have a different number of N values.
+	if(N_vals.empty()) {
+		throw runtime_error("write_csv_gapConvergence: N_vals must contain at least the start value");
+	}
+	int N_start = N_vals.front();
+	out << N_start;
+	for(size_t i = 0; i < g_vals.size(); ++i) {
+		int N_max = N_start + static_cast<int>(Espectrum.at(i).size()) - 1;
+		out << "," << N_max;
+	}
+	out << "\n";
+	// --- END ADDED variable-length gap convergence format ---
+
+	for (int i = 0; i < Espectrum.size(); i++) {
+		for (int j = 0; j < Espectrum[i].size(); j++) {
+        	const auto& E = Espectrum[i].at(j);
+        	out << E.E0 << "," << E.E1 << "," << E.gap << "\n";
+    	}
+	}
 }
 
 // Save function for optimization loop
@@ -207,6 +261,33 @@ int plot_Espectrum(const string& csv_file,
 }
 
 int plot_Espectrum_Pert(const string& csv_file,
+                     const string& out_png,
+                     const string& py_exec,
+                     const string& script,
+                     const string& mode){
+    // Quote arguments to survive spaces in paths.
+    auto q = [](const string& s){
+        ostringstream os;
+        os << "\"";
+        for(char c : s) { if(c == '"') os << '\\'; os << c; }
+        os << "\"";
+        return os.str();
+    };
+    const string data_dir = "./Data/";
+    const string plot_dir ="./Plots/";
+
+    string cmd =
+        q(py_exec) + " " + q(script) + " " + mode + " " + q(plot_dir + out_png) + " " + q(data_dir  + csv_file);
+
+    cout << "\n[plot] Running: " << cmd << "\n";
+    int rc = system(cmd.c_str());
+    if(rc != 0){
+        cerr << "[plot] Python plotting failed (exit code " << rc << ")\n";
+    }
+    return rc;
+}
+
+int plot_Espectrum_gap(const string& csv_file,
                      const string& out_png,
                      const string& py_exec,
                      const string& script,

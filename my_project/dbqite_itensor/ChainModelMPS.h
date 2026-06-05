@@ -44,6 +44,7 @@ public:
 
     // Experiment algorithm loops
     void basicModelLoop(const AlgoLoopParams& params) const;
+    void adaptiveSModelLoop(const AlgoLoopParams& params) const;
 
 private:
     // Build MPS, MPO and find groundstate(energy)
@@ -64,6 +65,7 @@ private:
 
     MPS applyU(int k, MPS psi, vector<double> const& theta_history) const;
     MPS applyUdag(int k, MPS psi, vector<double> const& theta_history) const;
+    MPS evolveOneStep(MPS psi, int current_level, double theta_step, vector<double> const& theta_history) const;
 
 
 

@@ -119,6 +119,59 @@ def read_csv_spectrumPert(path):
 
     return g, Espec
 
+def read_csv_gap_analysis(path):
+    g, E0, E1, gap, var0, var1 = [], [], [], [], [], []
+
+    with open(path, newline="") as f:
+        r = csv.DictReader(f)
+        has_var0 = "var0" in (r.fieldnames or [])
+        has_var1 = "var1" in (r.fieldnames or [])
+
+        for row in r:
+            g.append(float(row["g"]))
+            E0.append(float(row["E0"]))
+            E1.append(float(row["E1"]))
+            gap.append(float(row["gap"]))
+            var0.append(float(row["var0"]) if has_var0 and row["var0"] else math.nan)
+            var1.append(float(row["var1"]) if has_var1 and row["var1"] else math.nan)
+
+    return g, E0, E1, gap, var0, var1
+
+def read_csv_gapConvergence(path):
+    with open(path, newline="") as f:
+        reader = csv.reader(f)
+
+        next(reader, None)  # header
+        g_vals = [float(x) for x in next(reader)]
+        N_row = [int(x) for x in next(reader)]
+
+        # --- ADDED variable-length gap convergence format ---
+        # New row 2 format: N_start,Nmax_for_g0,Nmax_for_g1,...
+        # Old row 2 format: N0,N1,N2,... shared by every g curve.
+        if len(N_row) == len(g_vals) + 1:
+            N_start = N_row[0]
+            N_by_g = {
+                g: list(range(N_start, N_max + 1))
+                for g, N_max in zip(g_vals, N_row[1:])
+            }
+        else:
+            N_by_g = {g: list(N_row) for g in g_vals}
+        # --- END ADDED variable-length gap convergence format ---
+
+        E0_by_g = {g: [] for g in g_vals}
+        E1_by_g = {g: [] for g in g_vals}
+        gaps_by_g = {g: [] for g in g_vals}
+
+        for g in g_vals:
+            for N in N_by_g[g]:
+                row = next(reader)
+                E0, E1, gap = map(float, row)
+                E0_by_g[g].append(E0)
+                E1_by_g[g].append(E1)
+                gaps_by_g[g].append(gap)
+
+    return g_vals, N_by_g, E0_by_g, E1_by_g, gaps_by_g
+
 # ----------------------------- Plot Data in different ways --------------
 def plot_spectrum(out_png, csv_path, s_path):
     g, Espec, gap, gap2, gap3 = read_csv_spectrum(csv_path)
@@ -199,6 +252,230 @@ def plot_spectrumPert(out_png, csv_path):
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)
 
+
+
+def plot_spectrum_gap(out_png, csv_path):
+    g, E0, E1, gap, var0, var1 = read_csv_gap_analysis(csv_path)
+
+    # --- Spectrum plot ---
+    plt.figure()
+    plt.xlabel("coupling g")
+    plt.ylabel("Energy spectrum")
+    plt.title("Spectrum variation with coupling g")
+
+    plt.plot(g, E0, marker="o", markersize=2.5, label="E_0")
+    plt.plot(g, E1, marker="o", markersize=2.5, label="E_1")
+    plt.plot(g, gap, marker="o", markersize=2.5, label="Delta")
+
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=200)
+
+    has_variance = any(math.isfinite(v) for v in var0 + var1)
+    if has_variance:
+        variance_png = out_png.replace(".png", "_variance.png")
+        plt.figure()
+        plt.xlabel("coupling g")
+        plt.ylabel("energy variance")
+        plt.title("DMRG state variance")
+        plt.semilogy(g, var0, marker="o", markersize=2.5, label="var(E_0)")
+        plt.semilogy(g, var1, marker="o", markersize=2.5, label="var(E_1)")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(variance_png, dpi=200)
+        print(f"Saved {variance_png}")
+
+
+def plot_gap_convergence(out_png, csv_path):
+    g_vals, N_by_g, E0_by_g, E1_by_g, gaps_by_g = read_csv_gapConvergence(csv_path)
+
+    plt.figure()
+    for g in g_vals:
+        N_vals = N_by_g[g]
+        plt.plot(N_vals, gaps_by_g[g], marker="o", label=f"g={g}", markersize=2.0, linewidth=1.0)
+
+    plt.xlabel("N")
+    plt.xticks(np.arange(3, 22, 3))
+
+    plt.ylabel("gap")
+    plt.title("Gap convergence with system size")
+    plt.grid(True)
+    plt.legend(loc="lower left")
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=200)
+
+
+def plot_gap_convergence_fit(out_png, csv_path):
+    g_vals, N_by_g, E0_by_g, E1_by_g, gaps_by_g = read_csv_gapConvergence(csv_path)
+
+    plt.figure()
+    print("Finite-size mass-gap fits: gap(N) = m + A/sqrt(N) exp(-N/xi)")
+    fit_g_vals = []
+    fit_m_vals = []
+    fit_dm_vals = []
+    fit_xi_vals = []
+    fit_dxi_vals = []
+
+    for g in g_vals:
+        N_vals = N_by_g[g]
+        gaps = gaps_by_g[g]
+        line, = plt.plot(N_vals, gaps, marker="o", linestyle="", label=f"g={g} data", markersize=2.5)
+
+        try:
+            pars, stdevs, N_fit, gap_fit = FitStuff.fit_mass_gap_convergence(N_vals, gaps, fl = 0.05)
+        except Exception as exc:
+            print(f"g={g}: fit failed ({exc})")
+            continue
+
+        m, A, xi = pars
+        dm, dA, dxi = stdevs
+        xi_m = xi * m
+        d_xi_m = math.sqrt((xi * dm)**2 + (m * dxi)**2)
+        fit_g_vals.append(g)
+        fit_m_vals.append(m)
+        fit_dm_vals.append(dm)
+        fit_xi_vals.append(xi)
+        fit_dxi_vals.append(dxi)
+        plt.plot(N_fit, gap_fit, linestyle="--", color=line.get_color(), label=f"g={g} fit", linewidth=1.0)
+        print(
+            f"g={g}: "
+            f"A={A:.8g} +/- {dA:.2g}, "
+            f"m={m:.8g} +/- {dm:.2g}, "
+            f"xi={xi:.8g} +/- {dxi:.2g}, "
+            f"xi*m={xi_m:.8g} +/- {d_xi_m:.2g}"
+        )
+
+    plt.xlabel("N")
+    plt.xticks(np.arange(3, 85, 5))
+    plt.ylabel("gap")
+    plt.title("Gap convergence with finite-size fits")
+    plt.grid(True)
+    plt.legend(loc="upper right")
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=200)
+
+    if fit_g_vals:
+        params_png = out_png.replace(".png", "_fit_params.png")
+        g_arr = np.asarray(fit_g_vals, dtype=float)
+        g_squared_arr = g_arr**2
+        m_arr = np.asarray(fit_m_vals, dtype=float)
+        dm_arr = np.asarray(fit_dm_vals, dtype=float)
+        xi_arr = np.asarray(fit_xi_vals, dtype=float)
+        dxi_arr = np.asarray(fit_dxi_vals, dtype=float)
+        g_squared_xi_arr =  xi_arr / g_squared_arr
+        g_squared_dxi_arr = dxi_arr / g_squared_arr
+
+        dm_arr = np.where(np.isfinite(dm_arr), dm_arr, np.nan)
+        g_squared_dxi_arr = np.where(np.isfinite(g_squared_dxi_arr), g_squared_dxi_arr, np.nan)
+
+        fig, (ax_m, ax_xi) = plt.subplots(2, 1, sharex=True, figsize=(6.4, 7.2))
+
+        ax_m.errorbar(
+            g_squared_arr,
+            m_arr,
+            yerr=dm_arr,
+            xerr=None,
+            fmt="o-",
+            markersize=3.0,
+            capsize=3,
+        )
+        ax_m.set_ylabel("fitted m")
+        ax_m.set_title("Finite-size fit parameters vs coupling g^2")
+        ax_m.grid(True)
+
+        ax_xi.errorbar(
+            g_squared_arr,
+            g_squared_xi_arr,
+            yerr=g_squared_dxi_arr,
+            xerr=None,
+            fmt="o-",
+            markersize=3.0,
+            capsize=3,
+        )
+        ax_xi.set_xlabel("coupling g^2")
+        ax_xi.set_ylabel("g^2 fitted xi")
+        ax_xi.grid(True)
+
+        fig.tight_layout()
+        fig.savefig(params_png, dpi=200)
+        print(f"Saved {params_png}")
+
+
+
+def plot_energy_convergence(out_png, csv_path):
+    g_vals, N_by_g, E0_by_g, E1_by_g, gaps_by_g = read_csv_gapConvergence(csv_path)
+
+    plt.figure()
+    for g in g_vals:
+        N_vals = N_by_g[g]
+        N_arr = np.asarray(N_vals, dtype=float)
+        E0_density = np.asarray(E0_by_g[g], dtype=float) / N_arr
+        E1_density = np.asarray(E1_by_g[g], dtype=float) / N_arr
+
+        line, = plt.plot(
+            N_vals,
+            E0_density,
+            marker="o",
+            label=f"g={g} E0/N",
+            markersize=2.5,
+            linewidth=1.0,
+        )
+        plt.plot(
+            N_vals,
+            E1_density,
+            marker="s",
+            linestyle="--",
+            color=line.get_color(),
+            label=f"g={g} E1/N",
+            markersize=2.5,
+            linewidth=1.0,
+        )
+
+    plt.xlabel("N")
+    plt.xticks(np.arange(3, 85, 5))
+    plt.ylabel("energy density")
+    plt.title("Energy density convergence")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=200)
+
+    raw_out_png = out_png.replace(".png", "_raw.png")
+    plt.figure()
+    for g in g_vals:
+        N_vals = N_by_g[g]
+        E0 = np.asarray(E0_by_g[g], dtype=float)
+        E1 = np.asarray(E1_by_g[g], dtype=float)
+
+        line, = plt.plot(
+            N_vals,
+            E0,
+            marker="o",
+            label=f"g={g} E0",
+            markersize=2.5,
+            linewidth=1.0,
+        )
+        plt.plot(
+            N_vals,
+            E1,
+            marker="s",
+            linestyle="--",
+            color=line.get_color(),
+            label=f"g={g} E1",
+            markersize=2.5,
+            linewidth=1.0,
+        )
+
+    plt.xlabel("N")
+    plt.xticks(np.arange(3, 71, 3))
+    plt.ylabel("energy")
+    plt.title("Energy convergence")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
+    plt.savefig(raw_out_png, dpi=200)
 
 
 def plot_single_curves(out_png, csv_path, mode="F"):
@@ -486,6 +763,18 @@ def main():
 
     elif command == "spectrumPert":
         plot_spectrumPert(sys.argv[2], sys.argv[3] )
+
+    elif command == "spectrumEgap":
+        plot_spectrum_gap(sys.argv[2], sys.argv[3] )
+
+    elif command == "gapConvergence":
+        plot_gap_convergence(sys.argv[2], sys.argv[3])
+
+    elif command == "gapConvergenceFit":
+        plot_gap_convergence_fit(sys.argv[2], sys.argv[3])
+
+    elif command == "energyConvergence":
+        plot_energy_convergence(sys.argv[2], sys.argv[3])
 
     else:
         print("Unknown command")

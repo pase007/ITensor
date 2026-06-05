@@ -1,5 +1,5 @@
 CXX := clang++
-CXXFLAGS := -O3 -DNDEBUG -march=native -std=c++17
+CXXFLAGS := -O2 -std=c++17
 
 # Folder that CONTAINS the directory "itensor/"
 ITENSOR_PARENT := ../..
@@ -11,7 +11,7 @@ CXXFLAGS += -Wno-deprecated-literal-operator
 LDFLAGS := -L$(ITENSOR_PARENT)/lib
 LDLIBS  := -litensor -framework Accelerate
 
-SRC := main.cpp functions.cpp data.cpp TestModel.cpp StructFile.cpp TwoQubitTestModel.cpp BuildingHamiltonians.cpp OneSigmaSite.cpp BaseModel.cpp BaseModel2.cpp TwoSigmaSite.cpp ChainModel.cpp ChainModelMPS.cpp functionsMPS.cpp SigmaChainAnalysis.cpp
+SRC := main.cpp functions.cpp data.cpp TestModel.cpp StructFile.cpp TwoQubitTestModel.cpp BuildingHamiltonians.cpp OneSigmaSite.cpp BaseModel.cpp BaseModel2.cpp TwoSigmaSite.cpp ChainModel.cpp ChainModelMPS.cpp functionsMPS.cpp SigmaChainAnalysis.cpp GetData.cpp
 OBJ := $(SRC:.cpp=.o)
 
 all: dbqite_itensor
@@ -19,7 +19,7 @@ all: dbqite_itensor
 dbqite_itensor: $(OBJ)
 	$(CXX) $(CXXFLAGS) $(OBJ) -o $@ $(LDFLAGS) $(LDLIBS)
 
-%.o: %.cpp functions.h data.h TestModel.h StructFile.h TwoQubitTestModel.h BuildingHamiltonians.h OneSigmaSite.h BaseModel.h BaseModel2.h TwoSigmaSite.h ChainModel.h ChainModelMPS.h test_dmrg.h functionsMPS.h SigmaChainAnalysis.h
+%.o: %.cpp functions.h data.h TestModel.h StructFile.h TwoQubitTestModel.h BuildingHamiltonians.h OneSigmaSite.h BaseModel.h BaseModel2.h TwoSigmaSite.h ChainModel.h ChainModelMPS.h functionsMPS.h SigmaChainAnalysis.h GetData.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:

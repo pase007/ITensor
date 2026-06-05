@@ -91,3 +91,41 @@ def lnOfList(A):
 def linear_funct(x, m, c):
     return -m*x + c
 
+def mass_gap_finite_size(N, m, A, xi):
+    N = np.asarray(N, dtype=float)
+    return m + A / np.sqrt(N) * np.exp(-N / xi)
+
+def fit_mass_gap_convergence(N_data, gap_data, fl=0, fr=0):
+    N_data = np.asarray(N_data, dtype=float)
+    gap_data = np.asarray(gap_data, dtype=float)
+
+    if len(N_data) < 3:
+        raise ValueError("At least three N values are needed to fit m, A, and xi")
+
+    m0 = max(float(gap_data[-1]), 1e-12)
+    A0 = max(float(gap_data[0] - m0), 0.36)
+    xi0 = max((float(max(N_data)) - float(min(N_data))) / 2.0, 1.0)
+    #Fitintervall kürzen
+    if (fl != 0 or fr != 0):
+        n = len(N_data)
+        start_idx = int(fl * n) if fl > 0 else 0
+        end_idx = n - int(fr * n) if fr > 0 else n
+        if start_idx < end_idx:
+            x_data = N_data[start_idx:end_idx]
+            y_data = gap_data[start_idx:end_idx]
+
+    bounds = ([0.0, 0, 1e-12], [np.inf, np.inf, np.inf])
+    pars, cov = curve_fit(
+        f=mass_gap_finite_size,
+        xdata=N_data,
+        ydata=gap_data,
+        p0=[m0, A0, xi0],
+        bounds=bounds,
+        maxfev=500000,
+    )
+    stdevs = np.sqrt(np.diag(cov))
+
+    xfit = np.linspace(min(N_data), max(N_data), 200)
+    yfit = mass_gap_finite_size(xfit, *pars)
+
+    return pars, stdevs, xfit, yfit

@@ -39,7 +39,7 @@ protected:
     vector<double> energiesVec_;
 
 public:
-    SigmaChainAnalysis(double g, int N, bool PBC = false, bool quiet = true);
+    SigmaChainAnalysis(double g, int N, bool PBC = false, bool quiet = true, bool computeExcited = true);
 
     // Getters
     int NrSites() const { return NrSites_; }
@@ -69,6 +69,7 @@ public:
                                                      int rMin = 1, int rMax = -1) const;
     double fitCorrelationLength(int i0, int comp_i, int comp_j,
                                 int rMin = 2, int rMax = -1) const;
+    double transferCorrelationLength(int site = -1, int maxTransferDim = 1600) const;
     // --- END ADDED correlation-length helpers ---
 
     // Experiment algorithm loops

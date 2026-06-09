@@ -172,6 +172,28 @@ def read_csv_gapConvergence(path):
 
     return g_vals, N_by_g, E0_by_g, E1_by_g, gaps_by_g
 
+def read_csv_correlation_profile(path):
+    rows = []
+    with open(path, newline="") as f:
+        r = csv.DictReader(f)
+        for row in r:
+            clean = {}
+            for key, value in row.items():
+                if key in {"N", "i0", "comp_i", "comp_j", "r", "rMin", "rMax"}:
+                    clean[key] = int(value)
+                else:
+                    clean[key] = float(value)
+            if "m_corr" not in clean:
+                xi = clean.get("xi_corr", math.nan)
+                clean["m_corr"] = 1.0 / xi if math.isfinite(xi) and xi != 0.0 else math.nan
+            if "xi_transfer" not in clean:
+                clean["xi_transfer"] = math.nan
+            if "m_transfer" not in clean:
+                xi = clean.get("xi_transfer", math.nan)
+                clean["m_transfer"] = 1.0 / xi if math.isfinite(xi) and xi != 0.0 else math.nan
+            rows.append(clean)
+    return rows
+
 # ----------------------------- Plot Data in different ways --------------
 def plot_spectrum(out_png, csv_path, s_path):
     g, Espec, gap, gap2, gap3 = read_csv_spectrum(csv_path)
@@ -358,17 +380,22 @@ def plot_gap_convergence_fit(out_png, csv_path):
 
     if fit_g_vals:
         params_png = out_png.replace(".png", "_fit_params.png")
+        params_xi_gsq_png = out_png.replace(".png", "_fit_params_xi_gsq.png")
         g_arr = np.asarray(fit_g_vals, dtype=float)
         g_squared_arr = g_arr**2
         m_arr = np.asarray(fit_m_vals, dtype=float)
         dm_arr = np.asarray(fit_dm_vals, dtype=float)
         xi_arr = np.asarray(fit_xi_vals, dtype=float)
         dxi_arr = np.asarray(fit_dxi_vals, dtype=float)
-        g_squared_xi_arr =  xi_arr / g_squared_arr
+        g_squared_xi_arr = xi_arr / g_squared_arr
         g_squared_dxi_arr = dxi_arr / g_squared_arr
+        xi_times_g_squared_arr = xi_arr * g_squared_arr
+        dxi_times_g_squared_arr = dxi_arr * g_squared_arr
 
         dm_arr = np.where(np.isfinite(dm_arr), dm_arr, np.nan)
         g_squared_dxi_arr = np.where(np.isfinite(g_squared_dxi_arr), g_squared_dxi_arr, np.nan)
+        xi_times_g_squared_arr = np.where(np.isfinite(xi_times_g_squared_arr), xi_times_g_squared_arr, np.nan)
+        dxi_times_g_squared_arr = np.where(np.isfinite(dxi_times_g_squared_arr), dxi_times_g_squared_arr, np.nan)
 
         fig, (ax_m, ax_xi) = plt.subplots(2, 1, sharex=True, figsize=(6.4, 7.2))
 
@@ -395,12 +422,44 @@ def plot_gap_convergence_fit(out_png, csv_path):
             capsize=3,
         )
         ax_xi.set_xlabel("coupling g^2")
-        ax_xi.set_ylabel("g^2 fitted xi")
+        ax_xi.set_ylabel("fitted xi / g^2")
         ax_xi.grid(True)
 
         fig.tight_layout()
         fig.savefig(params_png, dpi=200)
         print(f"Saved {params_png}")
+
+        fig, (ax_m, ax_xi) = plt.subplots(2, 1, sharex=True, figsize=(6.4, 7.2))
+
+        ax_m.errorbar(
+            g_squared_arr,
+            m_arr,
+            yerr=dm_arr,
+            xerr=None,
+            fmt="o-",
+            markersize=3.0,
+            capsize=3,
+        )
+        ax_m.set_ylabel("fitted m")
+        ax_m.set_title("Finite-size fit parameters vs coupling g^2")
+        ax_m.grid(True)
+
+        ax_xi.errorbar(
+            g_squared_arr,
+            xi_times_g_squared_arr,
+            yerr=dxi_times_g_squared_arr,
+            xerr=None,
+            fmt="o-",
+            markersize=3.0,
+            capsize=3,
+        )
+        ax_xi.set_xlabel("coupling g^2")
+        ax_xi.set_ylabel("fitted xi * g^2")
+        ax_xi.grid(True)
+
+        fig.tight_layout()
+        fig.savefig(params_xi_gsq_png, dpi=200)
+        print(f"Saved {params_xi_gsq_png}")
 
 
 
@@ -476,6 +535,123 @@ def plot_energy_convergence(out_png, csv_path):
     plt.legend(loc="best")
     plt.tight_layout()
     plt.savefig(raw_out_png, dpi=200)
+
+
+def plot_correlation_profile(out_png, csv_path):
+    rows = read_csv_correlation_profile(csv_path)
+    if not rows:
+        raise ValueError(f"No correlation data in {csv_path}")
+
+    by_g = {}
+    for row in rows:
+        by_g.setdefault(row["g"], []).append(row)
+
+    profile_png = out_png.replace(".png", "_profile.png")
+    log_profile_png = out_png.replace(".png", "_log_profile.png")
+    xi_png = out_png.replace(".png", "_xi_vs_g.png")
+    mass_png = out_png.replace(".png", "_mass_vs_g.png")
+    xi_gsq_png = out_png.replace(".png", "_xi_times_gsq_vs_g.png")
+
+    plt.figure()
+    for g, grows in sorted(by_g.items()):
+        grows = sorted(grows, key=lambda x: x["r"])
+        r = [x["r"] for x in grows]
+        corr = [x["corr"] for x in grows]
+        plt.plot(r, corr, marker="o", markersize=2.5, linewidth=1.0, label=f"g={g:.3g}")
+    plt.xlabel("distance r")
+    plt.ylabel("connected correlation C(r)")
+    plt.title("Ground-state connected correlations")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
+    plt.savefig(profile_png, dpi=200)
+
+    plt.figure()
+    for g, grows in sorted(by_g.items()):
+        grows = sorted(grows, key=lambda x: x["r"])
+        r = [x["r"] for x in grows if math.isfinite(x["abs_corr"]) and x["abs_corr"] > 0.0]
+        abs_corr = [x["abs_corr"] for x in grows if math.isfinite(x["abs_corr"]) and x["abs_corr"] > 0.0]
+        if not r:
+            continue
+        plt.semilogy(r, abs_corr, marker="o", markersize=2.5, linewidth=1.0, label=f"g={g:.3g}")
+    plt.xlabel("distance r")
+    plt.ylabel("|C(r)|")
+    plt.title("Correlation decay")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
+    plt.savefig(log_profile_png, dpi=200)
+
+    g_vals = []
+    xi_corr = []
+    xi_gap = []
+    xi_transfer = []
+    for g, grows in sorted(by_g.items()):
+        first = grows[0]
+        g_vals.append(g)
+        xi_corr.append(first["xi_corr"])
+        xi_gap.append(first["xi_gap"])
+        xi_transfer.append(first["xi_transfer"])
+
+    plt.figure()
+    g_squared_vals = [g * g for g in g_vals]
+    plt.plot(g_squared_vals, xi_corr, marker="o", markersize=3.0, linewidth=1.0, label="fit from |C(r)|")
+    if any(math.isfinite(x) for x in xi_transfer):
+        plt.plot(g_squared_vals, xi_transfer, marker="^", markersize=3.0, linewidth=1.0, label="transfer matrix")
+    plt.plot(g_squared_vals, xi_gap, marker="s", markersize=3.0, linewidth=1.0, label="1/gap")
+    plt.xlabel("coupling g^2")
+    plt.ylabel("correlation length")
+    plt.title("Correlation length scan")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
+    plt.savefig(xi_png, dpi=200)
+
+    m_corr = []
+    m_transfer = []
+    gap = []
+    for g, grows in sorted(by_g.items()):
+        first = grows[0]
+        m_corr.append(first["m_corr"])
+        m_transfer.append(first["m_transfer"])
+        gap.append(first["gap"])
+
+    plt.figure()
+    plt.plot(g_squared_vals, m_corr, marker="o", markersize=3.0, linewidth=1.0, label="1/xi_corr")
+    if any(math.isfinite(x) for x in m_transfer):
+        plt.plot(g_squared_vals, m_transfer, marker="^", markersize=3.0, linewidth=1.0, label="1/xi_transfer")
+    if any(math.isfinite(x) for x in gap):
+        plt.plot(g_squared_vals, gap, marker="s", markersize=3.0, linewidth=1.0, label="DMRG gap")
+    plt.xlabel("coupling g^2")
+    plt.ylabel("mass")
+    plt.title("Correlation mass scan")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
+    plt.savefig(mass_png, dpi=200)
+
+    xi_times_gsq = [
+        xi * g * g if math.isfinite(xi) else math.nan
+        for g, xi in zip(g_vals, xi_corr)
+    ]
+    xi_transfer_times_gsq = [
+        xi * g * g if math.isfinite(xi) else math.nan
+        for g, xi in zip(g_vals, xi_transfer)
+    ]
+
+    plt.figure()
+    plt.plot(g_squared_vals, xi_times_gsq, marker="o", markersize=3.0, linewidth=1.0, label="xi_corr * g^2")
+    if any(math.isfinite(x) for x in xi_transfer_times_gsq):
+        plt.plot(g_squared_vals, xi_transfer_times_gsq, marker="^", markersize=3.0, linewidth=1.0, label="xi_transfer * g^2")
+    plt.xlabel("coupling g^2")
+    plt.ylabel("xi_corr * g^2")
+    plt.title("Scaled correlation length")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
+    plt.savefig(xi_gsq_png, dpi=200)
+
+    print(f"Saved {profile_png}, {log_profile_png}, {xi_png}, {mass_png}, and {xi_gsq_png}")
 
 
 def plot_single_curves(out_png, csv_path, mode="F"):
@@ -775,6 +951,9 @@ def main():
 
     elif command == "energyConvergence":
         plot_energy_convergence(sys.argv[2], sys.argv[3])
+
+    elif command == "corrProfile":
+        plot_correlation_profile(sys.argv[2], sys.argv[3])
 
     else:
         print("Unknown command")

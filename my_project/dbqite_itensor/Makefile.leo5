@@ -1,0 +1,24 @@
+# Linux/LEO5 build file. Keep the existing Makefile for macOS.
+#
+# Usage on LEO5 after building ITensor C++:
+#   make -f Makefile.leo5 ITENSOR_DIR=$HOME/ITensor dbqite_itensor
+#
+# ITENSOR_DIR must point to the ITensor C++ source directory containing
+# options.mk and lib/libitensor.a.
+
+ITENSOR_DIR ?= $(HOME)/ITensor
+include $(ITENSOR_DIR)/options.mk
+
+SRC := main.cpp functions.cpp data.cpp TestModel.cpp StructFile.cpp TwoQubitTestModel.cpp BuildingHamiltonians.cpp OneSigmaSite.cpp BaseModel.cpp BaseModel2.cpp TwoSigmaSite.cpp ChainModel.cpp ChainModelMPS.cpp functionsMPS.cpp SigmaChainAnalysis.cpp GetData.cpp
+OBJ := $(SRC:.cpp=.o)
+
+all: dbqite_itensor
+
+dbqite_itensor: $(OBJ)
+	$(CCCOM) $(OBJ) -o $@ $(LIBFLAGS)
+
+%.o: %.cpp functions.h data.h TestModel.h StructFile.h TwoQubitTestModel.h BuildingHamiltonians.h OneSigmaSite.h BaseModel.h BaseModel2.h TwoSigmaSite.h ChainModel.h ChainModelMPS.h functionsMPS.h SigmaChainAnalysis.h GetData.h
+	$(CCCOM) $(CCFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJ) dbqite_itensor

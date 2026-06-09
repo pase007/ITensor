@@ -33,8 +33,9 @@ void scanSpectrumDMRG(int NrSites);
 void scanSpectrum(int NrSites);
 void getChainGapConvergence();
 // --- ADDED correlation-length data scan ---
-void scanCorrelationLengthDMRG(int NrSites, int comp_i = 2, int comp_j = 1);
+void scanCorrelationLengthDMRG(int NrSites, int comp_i = 2, int comp_j = 1, bool computeExcited = false);
 void scanLaplaceBeltramiCorrelationLengthDMRG(int NrSites);
+void plotCorrelationLengthDMRG(int NrSites);
 // --- END ADDED correlation-length data scan ---
 
 // MPS based code with different theta shedules

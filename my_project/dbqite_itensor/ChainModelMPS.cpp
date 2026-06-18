@@ -207,6 +207,8 @@ void ChainModelMPS::basicModelLoop(const AlgoLoopParams& params) const {
     //Data container
     vector<Row> rows;
     rows.reserve(K+1);
+    vector<DBQITEUnitaryTraceRow> unitary_rows;
+    unitary_rows.reserve(K+1);
     vector<double> theta_history;
     theta_history.reserve(K);
     double schedule_factor = params.schedule_factor;
@@ -215,6 +217,8 @@ void ChainModelMPS::basicModelLoop(const AlgoLoopParams& params) const {
 
     // Start psi as U0 * p0_
     MPS psi = applyU0(p0_);
+    DBQITEUnitaryCounts unitary_counts;
+    unitary_counts.U0 = 1;
 
     // Norm checks
     cout << "ground norm = " << real(innerC(groundstate_, groundstate_)) << "\n";
@@ -232,6 +236,7 @@ void ChainModelMPS::basicModelLoop(const AlgoLoopParams& params) const {
             break;
         }
         rows.push_back(Row{k-1, Ek, Fk});
+        unitary_rows.push_back(DBQITEUnitaryTraceRow{k-1, IFk, unitary_counts});
         cout << k-1 << "\t" << Ek << "\t" << Var << "\t" << IFk << "\t" << nrm << "\t" << maxLinkDim(psi) << "\n";
 
         if (IFk < infid_target) {
@@ -244,9 +249,11 @@ void ChainModelMPS::basicModelLoop(const AlgoLoopParams& params) const {
         double shed = theta * pow(sqrt(schedule_factor), k-1);
         theta_history.push_back(shed);
         psi = evolveOneStep(psi, k-1, shed, theta_history);
+        unitary_counts.advanceOneDBQITEStep();
     }
     // write data
     write_csv("data" + s_string + ".csv", rows);
+    write_csv_unitary_trace("data" + s_string + "_unitaries.csv", unitary_rows);
 }
 
 void ChainModelMPS::adaptiveSModelLoop(const AlgoLoopParams& params) const {
@@ -259,6 +266,8 @@ void ChainModelMPS::adaptiveSModelLoop(const AlgoLoopParams& params) const {
 
     vector<Row> rows;
     rows.reserve(K+1);
+    vector<DBQITEUnitaryTraceRow> unitary_rows;
+    unitary_rows.reserve(K+1);
     vector<double> theta_history;
     theta_history.reserve(K);
     double current_s = s_step;
@@ -323,6 +332,8 @@ void ChainModelMPS::adaptiveSModelLoop(const AlgoLoopParams& params) const {
     };
 
     MPS psi = applyU0(p0_);
+    DBQITEUnitaryCounts unitary_counts;
+    unitary_counts.U0 = 1;
 
     cout << "ground norm = " << real(innerC(groundstate_, groundstate_)) << "\n";
     cout << "k\tEnergy(<X>)\t\tVariance(H)\t\tInfidelity(|->)\t\tNorm(psi)\t\tmaxBondDim(psi)\n";
@@ -337,6 +348,7 @@ void ChainModelMPS::adaptiveSModelLoop(const AlgoLoopParams& params) const {
             break;
         }
         rows.push_back(Row{k-1, Ek, Fk});
+        unitary_rows.push_back(DBQITEUnitaryTraceRow{k-1, IFk, unitary_counts});
         cout << k-1 << "\t" << Ek << "\t" << Var << "\t" << IFk << "\t" << nrm << "\t" << maxLinkDim(psi) << "\n";
 
         if (IFk < infid_target) {
@@ -351,12 +363,13 @@ void ChainModelMPS::adaptiveSModelLoop(const AlgoLoopParams& params) const {
             cout << "initial s_0 = " << s_step
                  << " (theta = " << initial_theta << ")\n";
             psi = evolveOneStep(psi, k-1, initial_theta, theta_history);
+            unitary_counts.advanceOneDBQITEStep();
             continue;
         }
 
         vector<double> candidates = params.s_candidates;
         if (candidates.empty()) {
-            candidates = {0.5*s_step, 0.6*s_step, 0.7*current_s, 0.8*current_s, 0.9*current_s, current_s};
+            candidates = {0.7*s_step, 0.8*s_step, 0.9*current_s, 0.95*current_s, 1.0*current_s, 1.05*current_s};
         }
 
         CandidateResult coarse_result = evaluateCandidates(candidates, psi, k-1, theta_history, current_s);
@@ -368,8 +381,8 @@ void ChainModelMPS::adaptiveSModelLoop(const AlgoLoopParams& params) const {
         double coarse_s = coarse_result.s;
         CandidateResult best_result;
         if (params.refine_s) {
-            vector<double> refine_candidates = {0.8*coarse_s, 0.9*coarse_s, coarse_s,
-                                                1.1*coarse_s, 1.2*coarse_s};
+            vector<double> refine_candidates = {0.8*coarse_s, 0.9*coarse_s, 0.95*coarse_s,
+                                                1.0*coarse_s, 1.1*coarse_s};
             CandidateResult refine_result = evaluateCandidates(refine_candidates, psi, k-1, theta_history, current_s);
             if (refine_result.stable) {
                 best_result = std::move(refine_result);
@@ -390,7 +403,9 @@ void ChainModelMPS::adaptiveSModelLoop(const AlgoLoopParams& params) const {
         theta_history.push_back(best_result.theta);
         current_s = best_result.s;
         psi = std::move(best_result.psi);
+        unitary_counts.advanceOneDBQITEStep();
     }
 
     write_csv("data" + s_string + ".csv", rows);
+    write_csv_unitary_trace("data" + s_string + "_unitariesAdapt.csv", unitary_rows);
 }

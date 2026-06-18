@@ -27,12 +27,16 @@ void BaseModel::basicModelLoop(const AlgoLoopParams& params) const {
     //Data container
     vector<Row> rows;
     rows.reserve(K+1);
+    vector<DBQITEUnitaryTraceRow> unitary_rows;
+    unitary_rows.reserve(K+1);
     cout << "k\tEnergy(<X>)\t\tInfidelity(|->)\t\tunitarity defect\n";
     double Ek, Fk, IFk;
 
     // Start U0 = I
     ITensor U = idGate(s_);
     ITensor I = idGate(s_);
+    DBQITEUnitaryCounts unitary_counts;
+    unitary_counts.U0 = 1;
 
     // Contruct Unitaries A and R
     ITensor A  = exp_i_theta_H(H_, theta);
@@ -49,6 +53,7 @@ void BaseModel::basicModelLoop(const AlgoLoopParams& params) const {
         Fk = fidelity(psi, phi_);
         IFk = 1 - Fk;
         rows.push_back(Row{k, Ek, Fk});
+        unitary_rows.push_back(DBQITEUnitaryTraceRow{k, IFk, unitary_counts});
 
         cout << k << "\t" << Ek << "\t" << IFk << "\t";
         if (IFk < infid_target) {
@@ -80,9 +85,11 @@ void BaseModel::basicModelLoop(const AlgoLoopParams& params) const {
             U = Ui;
             cout << endl;
         }
+        unitary_counts.advanceOneDBQITEStep();
     }
     //write_csv("data.csv", rows);
     write_csv("data" + s_string + ".csv", rows);
+    write_csv_unitary_trace("data" + s_string + "_unitaries.csv", unitary_rows);
 }
 
 
@@ -178,6 +185,7 @@ void BaseModel::optimizeStepsLoop(const AlgoOptParams& params) const {
     // Data Container
     vector<RowOpt> rows;
     rows.reserve(s_bin+1);
+    vector<DBQITEUnitaryOptTraceRow> unitary_rows;
     double Fk, IFk;
     cout << "current s\tsteps k" << endl;
 
@@ -189,6 +197,8 @@ void BaseModel::optimizeStepsLoop(const AlgoOptParams& params) const {
         // Start U0 = I
         ITensor U = idGate(s_);
         ITensor I = idGate(s_);
+        DBQITEUnitaryCounts unitary_counts;
+        unitary_counts.U0 = 1;
 
         // Contruct Unitaries A and R
         ITensor A  = exp_i_theta_H(H_, theta);
@@ -201,6 +211,7 @@ void BaseModel::optimizeStepsLoop(const AlgoOptParams& params) const {
             // Calculate Observables and save them
             Fk = fidelity(psi, phi_);
             IFk = 1 - Fk;
+            unitary_rows.push_back(DBQITEUnitaryOptTraceRow{s_step, k, IFk, unitary_counts});
 
             if (IFk > infid_target) {
                 if (k<K_max) {
@@ -228,6 +239,7 @@ void BaseModel::optimizeStepsLoop(const AlgoOptParams& params) const {
                         U = Ui;
                         //cout << endl;
                     }
+                    unitary_counts.advanceOneDBQITEStep();
                 }else if (k == K_max) {
                     cout << k << endl;
                     rows.push_back(RowOpt{s_step, k, IFk});
@@ -240,5 +252,6 @@ void BaseModel::optimizeStepsLoop(const AlgoOptParams& params) const {
         }
     }
     write_csv_opt("data" + str_infid_target + "opt.csv", rows);
+    write_csv_unitary_opt_trace("data" + str_infid_target + "opt_unitaries.csv", unitary_rows);
 
 }

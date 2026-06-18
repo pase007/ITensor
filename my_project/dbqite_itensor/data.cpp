@@ -7,6 +7,16 @@
 #include <iostream>
 #include <sstream>
 #include <cstdlib>   // std::system
+#include <cerrno>
+#include <sys/stat.h>
+
+namespace {
+void ensure_directory(const string& path) {
+    if(::mkdir(path.c_str(), 0775) != 0 && errno != EEXIST) {
+        throw runtime_error("Could not create directory: " + path);
+    }
+}
+}
 
 // ---------------------------------------------------------------------------
 // --------------------------- Save Data  Handling ---------------------------
@@ -136,6 +146,53 @@ void write_csv_eps(const string& filename, const vector<RowInfid>& rows) {
     out << setprecision(14);
     for(const auto& r : rows) {
         out << r.infid_step << "," << r.k << "," << r.infidelity << "\n";
+    }
+}
+
+void write_csv_unitary_trace(const string& filename, const vector<DBQITEUnitaryTraceRow>& rows) {
+    const string data_dir = "./DataCounts/";
+    ensure_directory(data_dir);
+    ofstream out(data_dir + filename);
+    if(!out) {
+        throw runtime_error("Could not open file for writing: " + filename);
+    }
+
+    out << "k,Infidelity,U0,U0_dag,A,A_dag,R0,R0_dag,total_unitaries\n";
+    out << setprecision(14);
+    for(const auto& r : rows) {
+        out << r.k << ","
+            << r.infidelity << ","
+            << r.counts.U0 << ","
+            << r.counts.U0_dag << ","
+            << r.counts.A << ","
+            << r.counts.A_dag << ","
+            << r.counts.R0 << ","
+            << r.counts.R0_dag << ","
+            << r.counts.total() << "\n";
+    }
+}
+
+void write_csv_unitary_opt_trace(const string& filename, const vector<DBQITEUnitaryOptTraceRow>& rows) {
+    const string data_dir = "./DataCounts/";
+    ensure_directory(data_dir);
+    ofstream out(data_dir + filename);
+    if(!out) {
+        throw runtime_error("Could not open file for writing: " + filename);
+    }
+
+    out << "s,k,Infidelity,U0,U0_dag,A,A_dag,R0,R0_dag,total_unitaries\n";
+    out << setprecision(14);
+    for(const auto& r : rows) {
+        out << r.s_step << ","
+            << r.k << ","
+            << r.infidelity << ","
+            << r.counts.U0 << ","
+            << r.counts.U0_dag << ","
+            << r.counts.A << ","
+            << r.counts.A_dag << ","
+            << r.counts.R0 << ","
+            << r.counts.R0_dag << ","
+            << r.counts.total() << "\n";
     }
 }
 
@@ -310,6 +367,72 @@ int plot_Espectrum_gap(const string& csv_file,
     int rc = system(cmd.c_str());
     if(rc != 0){
         cerr << "[plot] Python plotting failed (exit code " << rc << ")\n";
+    }
+    return rc;
+}
+
+int plot_mass_difference(const string& left_csv_file,
+                     const string& right_csv_file,
+                     const string& out_png,
+                     const string& left_column,
+                     const string& right_column,
+                     const string& py_exec,
+                     const string& script,
+                     const string& mode){
+    auto q = [](const string& s){
+        ostringstream os;
+        os << "\"";
+        for(char c : s) { if(c == '"') os << '\\'; os << c; }
+        os << "\"";
+        return os.str();
+    };
+    const string data_dir = "./Data/";
+    const string plot_dir = "./Plots/";
+
+    string cmd =
+        q(py_exec) + " " + q(script) + " " + mode + " " + q(plot_dir + out_png)
+        + " " + q(data_dir + left_csv_file)
+        + " " + q(data_dir + right_csv_file)
+        + " " + q(left_column)
+        + " " + q(right_column);
+
+    cout << "\n[plot] Running: " << cmd << "\n";
+    int rc = system(cmd.c_str());
+    if(rc != 0){
+        cerr << "[plot] Python plotting failed (exit code " << rc << ")\n";
+    }
+    return rc;
+}
+
+int merge_correlation_files(const string& out_csv_file,
+                     const vector<string>& input_csv_files,
+                     const string& py_exec,
+                     const string& script,
+                     const string& mode){
+    if(input_csv_files.empty()) {
+        cerr << "[mergeCorr] No input files provided\n";
+        return 2;
+    }
+
+    auto q = [](const string& s){
+        ostringstream os;
+        os << "\"";
+        for(char c : s) { if(c == '"') os << '\\'; os << c; }
+        os << "\"";
+        return os.str();
+    };
+    const string data_dir = "./Data/";
+
+    ostringstream cmd;
+    cmd << q(py_exec) << " " << q(script) << " " << mode << " " << q(data_dir + out_csv_file);
+    for(const auto& input : input_csv_files) {
+        cmd << " " << q(data_dir + input);
+    }
+
+    cout << "\n[mergeCorr] Running: " << cmd.str() << "\n";
+    int rc = system(cmd.str().c_str());
+    if(rc != 0){
+        cerr << "[mergeCorr] Python merge failed (exit code " << rc << ")\n";
     }
     return rc;
 }

@@ -65,12 +65,11 @@ public:
     double onePoint(int site, int comp) const;
     double twoPoint(int i, int j, int comp_i, int comp_j) const;
     double connectedCorr(int i, int j, int comp_i, int comp_j) const;
-    vector<std::pair<int,double>> correlationProfile(int i0, int comp_i, int comp_j,
-                                                     int rMin = 1, int rMax = -1) const;
-    double fitCorrelationLength(int i0, int comp_i, int comp_j,
-                                int rMin = 2, int rMax = -1) const;
-    double transferCorrelationLength(int site = -1, int maxTransferDim = 1600) const;
-    // --- END ADDED correlation-length helpers ---
+	    vector<std::pair<int,double>> correlationProfile(int i0, int comp_i, int comp_j,
+	                                                     int rMin = 1, int rMax = -1) const;
+	    double fitCorrelationLength(int i0, int comp_i, int comp_j,
+	                                int rMin = 2, int rMax = -1) const;
+	    // --- END ADDED correlation-length helpers ---
 
     // Experiment algorithm loops
 

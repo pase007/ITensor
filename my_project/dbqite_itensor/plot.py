@@ -1,5 +1,6 @@
 import sys
 import csv
+import os
 import re
 import math
 import numpy as np
@@ -186,13 +187,112 @@ def read_csv_correlation_profile(path):
             if "m_corr" not in clean:
                 xi = clean.get("xi_corr", math.nan)
                 clean["m_corr"] = 1.0 / xi if math.isfinite(xi) and xi != 0.0 else math.nan
-            if "xi_transfer" not in clean:
-                clean["xi_transfer"] = math.nan
-            if "m_transfer" not in clean:
-                xi = clean.get("xi_transfer", math.nan)
-                clean["m_transfer"] = 1.0 / xi if math.isfinite(xi) and xi != 0.0 else math.nan
             rows.append(clean)
     return rows
+
+def read_mass_by_g_squared(path, mass_column):
+    masses = {}
+
+    with open(path, newline="") as f:
+        r = csv.DictReader(f)
+        if r.fieldnames is None:
+            raise ValueError(f"{path} has no header")
+        if "g" not in r.fieldnames:
+            raise ValueError(f"{path} has no 'g' column")
+        if mass_column not in r.fieldnames:
+            raise ValueError(f"{path} has no '{mass_column}' column")
+
+        for row in r:
+            try:
+                g = float(row["g"])
+                mass = float(row[mass_column])
+            except (TypeError, ValueError):
+                continue
+
+            if not math.isfinite(g) or not math.isfinite(mass):
+                continue
+
+            # Correlation profile files contain many rows per g, one per distance r.
+            # The mass columns are constant for those rows, so keep the first value.
+            g_squared_key = round(g * g, 12)
+            masses.setdefault(g_squared_key, (g, mass))
+
+    return masses
+
+def read_mass_difference(left_path, right_path, left_column, right_column):
+    left = read_mass_by_g_squared(left_path, left_column)
+    right = read_mass_by_g_squared(right_path, right_column)
+    common_g_squared = sorted(set(left).intersection(right))
+
+    rows = []
+    for g_squared in common_g_squared:
+        g_left, mass_left = left[g_squared]
+        g_right, mass_right = right[g_squared]
+        rows.append({
+            "g": 0.5 * (g_left + g_right),
+            "g_squared": g_squared,
+            left_column: mass_left,
+            right_column: mass_right,
+            "difference": mass_left - mass_right,
+        })
+
+    return rows
+
+def merge_correlation_files(out_path, input_paths):
+    if not input_paths:
+        raise ValueError("mergeCorr needs at least one input file")
+
+    header = None
+    rows_by_key = {}
+    duplicate_count = 0
+    conflict_count = 0
+
+    for path in input_paths:
+        with open(path, newline="") as f:
+            reader = csv.DictReader(f)
+            if reader.fieldnames is None:
+                raise ValueError(f"{path} has no header")
+            if header is None:
+                header = reader.fieldnames
+                missing = {"g", "N", "comp_i", "comp_j", "r"} - set(header)
+                if missing:
+                    raise ValueError(f"{path} is missing merge-key columns: {sorted(missing)}")
+            elif reader.fieldnames != header:
+                raise ValueError(f"{path} has a different header")
+
+            for row in reader:
+                try:
+                    key = (
+                        round(float(row["g"]), 12),
+                        int(row["N"]),
+                        int(row["comp_i"]),
+                        int(row["comp_j"]),
+                        int(row["r"]),
+                    )
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"{path} has an invalid merge key row: {row}") from exc
+
+                if key in rows_by_key:
+                    duplicate_count += 1
+                    if row != rows_by_key[key]:
+                        conflict_count += 1
+                        print(f"mergeCorr warning: duplicate key with different row, keeping first: {key}")
+                    continue
+
+                rows_by_key[key] = row
+
+    sorted_rows = [
+        rows_by_key[key]
+        for key in sorted(rows_by_key)
+    ]
+
+    with open(out_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=header)
+        writer.writeheader()
+        writer.writerows(sorted_rows)
+
+    print(f"mergeCorr wrote {len(sorted_rows)} rows to {out_path}")
+    print(f"mergeCorr skipped {duplicate_count} duplicate rows ({conflict_count} conflicting)")
 
 # ----------------------------- Plot Data in different ways --------------
 def plot_spectrum(out_png, csv_path, s_path):
@@ -200,6 +300,8 @@ def plot_spectrum(out_png, csv_path, s_path):
     gx, sy = read_csv(s_path)
 
     # --- Spectrum plot ---
+    # Plot raw connected correlations C(r) from CSV columns r and corr for each g.
+    # Plot raw connected correlations C(r) from CSV columns r and corr for each g.
     plt.figure()
     plt.xlabel("coupling g")
     plt.ylabel("Energy spectrum")
@@ -221,6 +323,8 @@ def plot_spectrum(out_png, csv_path, s_path):
     plt.savefig(out_png.replace(".png", "_spectrum.png"), dpi=200)
 
     # --- Gap plot ---
+    # Plot raw decay |C(r)| from CSV columns r and abs_corr for each g on a semilog y-axis.
+    # Plot raw decay |C(r)| from CSV columns r and abs_corr for each g on a semilog y-axis.
     plt.figure()
     plt.xlabel("coupling g")
     plt.ylabel("Δ = E1 - E0")
@@ -297,6 +401,7 @@ def plot_spectrum_gap(out_png, csv_path):
     has_variance = any(math.isfinite(v) for v in var0 + var1)
     if has_variance:
         variance_png = out_png.replace(".png", "_variance.png")
+        # Plot xi_fit * g^2 vs 1/g^2, where xi_fit = -1/slope from the local log-linear fit above.
         plt.figure()
         plt.xlabel("coupling g")
         plt.ylabel("energy variance")
@@ -381,21 +486,39 @@ def plot_gap_convergence_fit(out_png, csv_path):
     if fit_g_vals:
         params_png = out_png.replace(".png", "_fit_params.png")
         params_xi_gsq_png = out_png.replace(".png", "_fit_params_xi_gsq.png")
+        fit_params_csv = csv_path.rsplit(".", 1)[0] + "_fit_params.csv"
         g_arr = np.asarray(fit_g_vals, dtype=float)
         g_squared_arr = g_arr**2
         m_arr = np.asarray(fit_m_vals, dtype=float)
         dm_arr = np.asarray(fit_dm_vals, dtype=float)
         xi_arr = np.asarray(fit_xi_vals, dtype=float)
         dxi_arr = np.asarray(fit_dxi_vals, dtype=float)
-        g_squared_xi_arr = xi_arr / g_squared_arr
-        g_squared_dxi_arr = dxi_arr / g_squared_arr
-        xi_times_g_squared_arr = xi_arr * g_squared_arr
-        dxi_times_g_squared_arr = dxi_arr * g_squared_arr
 
         dm_arr = np.where(np.isfinite(dm_arr), dm_arr, np.nan)
-        g_squared_dxi_arr = np.where(np.isfinite(g_squared_dxi_arr), g_squared_dxi_arr, np.nan)
-        xi_times_g_squared_arr = np.where(np.isfinite(xi_times_g_squared_arr), xi_times_g_squared_arr, np.nan)
-        dxi_times_g_squared_arr = np.where(np.isfinite(dxi_times_g_squared_arr), dxi_times_g_squared_arr, np.nan)
+
+        with open(fit_params_csv, "w", newline="") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=["g", "g_squared", "m", "dm", "xi", "dxi"],
+            )
+            writer.writeheader()
+            for g, g_squared, m, dm, xi, dxi in zip(
+                g_arr,
+                g_squared_arr,
+                m_arr,
+                dm_arr,
+                xi_arr,
+                dxi_arr,
+            ):
+                writer.writerow({
+                    "g": g,
+                    "g_squared": g_squared,
+                    "m": m,
+                    "dm": dm,
+                    "xi": xi,
+                    "dxi": dxi,
+                })
+        print(f"Saved {fit_params_csv}")
 
         fig, (ax_m, ax_xi) = plt.subplots(2, 1, sharex=True, figsize=(6.4, 7.2))
 
@@ -414,47 +537,15 @@ def plot_gap_convergence_fit(out_png, csv_path):
 
         ax_xi.errorbar(
             g_squared_arr,
-            g_squared_xi_arr,
-            yerr=g_squared_dxi_arr,
+            xi_arr,
+            yerr=dxi_arr,
             xerr=None,
             fmt="o-",
             markersize=3.0,
             capsize=3,
         )
         ax_xi.set_xlabel("coupling g^2")
-        ax_xi.set_ylabel("fitted xi / g^2")
-        ax_xi.grid(True)
-
-        fig.tight_layout()
-        fig.savefig(params_png, dpi=200)
-        print(f"Saved {params_png}")
-
-        fig, (ax_m, ax_xi) = plt.subplots(2, 1, sharex=True, figsize=(6.4, 7.2))
-
-        ax_m.errorbar(
-            g_squared_arr,
-            m_arr,
-            yerr=dm_arr,
-            xerr=None,
-            fmt="o-",
-            markersize=3.0,
-            capsize=3,
-        )
-        ax_m.set_ylabel("fitted m")
-        ax_m.set_title("Finite-size fit parameters vs coupling g^2")
-        ax_m.grid(True)
-
-        ax_xi.errorbar(
-            g_squared_arr,
-            xi_times_g_squared_arr,
-            yerr=dxi_times_g_squared_arr,
-            xerr=None,
-            fmt="o-",
-            markersize=3.0,
-            capsize=3,
-        )
-        ax_xi.set_xlabel("coupling g^2")
-        ax_xi.set_ylabel("fitted xi * g^2")
+        ax_xi.set_ylabel("fitted xi")
         ax_xi.grid(True)
 
         fig.tight_layout()
@@ -536,6 +627,78 @@ def plot_energy_convergence(out_png, csv_path):
     plt.tight_layout()
     plt.savefig(raw_out_png, dpi=200)
 
+def plot_mass_difference(
+    out_png,
+    left_path,
+    right_path,
+    left_column="m_corr",
+    right_column="gap",
+    left_label=None,
+    right_label=None,
+):
+    rows = read_mass_difference(left_path, right_path, left_column, right_column)
+    if not rows:
+        raise ValueError(
+            f"No common finite g^2 values found between {left_path}:{left_column} "
+            f"and {right_path}:{right_column}"
+        )
+
+    left_label = left_label or left_column
+    right_label = right_label or right_column
+
+    g_squared = [row["g_squared"] for row in rows]
+    left_mass = [row[left_column] for row in rows]
+    right_mass = [row[right_column] for row in rows]
+    difference = [row["difference"] for row in rows]
+
+    csv_name = os.path.basename(out_png).replace(".png", "_matched_difference.csv")
+    csv_out = os.path.join(os.path.dirname(left_path) or ".", csv_name)
+    with open(csv_out, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["g", "g_squared", left_column, right_column, "difference"],
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+    fig, (ax_mass, ax_diff) = plt.subplots(2, 1, sharex=True, figsize=(6.4, 7.2))
+
+    ax_mass.plot(g_squared, left_mass, marker="o", markersize=3.0, linewidth=1.0, label=left_label)
+    ax_mass.plot(g_squared, right_mass, marker="s", markersize=3.0, linewidth=1.0, label=right_label)
+    ax_mass.set_ylabel("mass")
+    ax_mass.set_title("Matched masses")
+    ax_mass.grid(True)
+    ax_mass.legend(loc="best")
+
+    ax_diff.axhline(0.0, color="black", linewidth=0.8)
+    ax_diff.plot(
+        g_squared,
+        difference,
+        marker="o",
+        markersize=3.0,
+        linewidth=1.0,
+        label=f"{left_label} - {right_label}",
+    )
+    ax_diff.set_xlabel("coupling g^2")
+    ax_diff.set_ylabel("mass difference")
+    ax_diff.set_title("Mass difference")
+    ax_diff.grid(True)
+    ax_diff.legend(loc="best")
+
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=200)
+    print(f"Matched {len(rows)} common g^2 values")
+    print(f"{'g':>10} {'g^2':>12} {left_label:>16} {right_label:>16} {'diff':>16}")
+    for row in rows:
+        print(
+            f"{row['g']:10.6g} "
+            f"{row['g_squared']:12.6g} "
+            f"{row[left_column]:16.8g} "
+            f"{row[right_column]:16.8g} "
+            f"{row['difference']:16.8g}"
+        )
+    print(f"Saved {out_png} and {csv_out}")
+
 
 def plot_correlation_profile(out_png, csv_path):
     rows = read_csv_correlation_profile(csv_path)
@@ -548,10 +711,16 @@ def plot_correlation_profile(out_png, csv_path):
 
     profile_png = out_png.replace(".png", "_profile.png")
     log_profile_png = out_png.replace(".png", "_log_profile.png")
+    log_profile_fit_png = out_png.replace(".png", "_log_profile_fit_every_second.png")
+    fit_xi_gsq_inv_gsq_png = out_png.replace(".png", "_fit_xi_times_gsq_vs_inv_gsq.png")
+    fit_mass_gsq_png = out_png.replace(".png", "_fit_mass_vs_gsq.png")
     xi_png = out_png.replace(".png", "_xi_vs_g.png")
     mass_png = out_png.replace(".png", "_mass_vs_g.png")
     xi_gsq_png = out_png.replace(".png", "_xi_times_gsq_vs_g.png")
+    xi_gsq_inv_gsq_png = out_png.replace(".png", "_xi_times_gsq_vs_inv_gsq.png")
+    xi_gsq_inv_gsq_logy_png = out_png.replace(".png", "_xi_times_gsq_vs_inv_gsq_logy.png")
 
+    # Plot raw connected correlations C(r) from CSV columns r and corr for each g.
     plt.figure()
     for g, grows in sorted(by_g.items()):
         grows = sorted(grows, key=lambda x: x["r"])
@@ -566,6 +735,7 @@ def plot_correlation_profile(out_png, csv_path):
     plt.tight_layout()
     plt.savefig(profile_png, dpi=200)
 
+    # Plot raw decay |C(r)| from CSV columns r and abs_corr for each g on a semilog y-axis.
     plt.figure()
     for g, grows in sorted(by_g.items()):
         grows = sorted(grows, key=lambda x: x["r"])
@@ -582,22 +752,100 @@ def plot_correlation_profile(out_png, csv_path):
     plt.tight_layout()
     plt.savefig(log_profile_png, dpi=200)
 
+    # Plot every second g curve as log(|C(r)|); fit data is computed here from CSV abs_corr via log(|C(r)|) = a + b*r.
+    corr_fit_floor = 1e-16
+    plt.figure()
+    fit_g_vals = []
+    fit_xi_vals = []
+    fit_mass_vals = []
+    for curve_idx, (g, grows) in enumerate(sorted(by_g.items())):
+        if curve_idx % 2 != 0:
+            continue
+
+        grows = sorted(grows, key=lambda x: x["r"])
+        fit_points = [
+            (x["r"], x["abs_corr"])
+            for x in grows
+            if math.isfinite(x["abs_corr"]) and x["abs_corr"] >= corr_fit_floor
+        ]
+        if len(fit_points) < 2:
+            continue
+
+        r = np.array([x[0] for x in fit_points], dtype=float)
+        abs_corr = np.array([x[1] for x in fit_points], dtype=float)
+        log_abs_corr = np.log(abs_corr)
+        slope, intercept = np.polyfit(r, log_abs_corr, 1)
+        fit_log_abs_corr = intercept + slope * r
+        xi_fit = -1.0 / slope if slope < 0.0 else math.nan
+        mass_fit = -slope if slope < 0.0 else math.nan
+        if math.isfinite(xi_fit) and math.isfinite(mass_fit):
+            fit_g_vals.append(g)
+            fit_xi_vals.append(xi_fit)
+            fit_mass_vals.append(mass_fit)
+
+        points = plt.scatter(r, log_abs_corr, s=6, label=f"g={g:.3g}")
+        plt.plot(
+            r,
+            fit_log_abs_corr,
+            linestyle="--",
+            linewidth=1.0,
+            color=points.get_facecolor()[0],
+            label=f"fit g={g:.3g}, xi={xi_fit:.3g}, m={mass_fit:.3g}",
+        )
+    plt.xlabel("distance r")
+    plt.ylabel("log(|C(r)|)")
+    plt.title("Log correlation decay with linear fits")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
+    plt.savefig(log_profile_fit_png, dpi=200)
+
+    fit_inv_g_squared_vals = [
+        1.0 / (g * g) if g != 0.0 else math.nan
+        for g in fit_g_vals
+    ]
+    fit_g_squared_vals = [g * g for g in fit_g_vals]
+    fit_xi_times_gsq = [
+        xi * g * g if math.isfinite(xi) else math.nan
+        for g, xi in zip(fit_g_vals, fit_xi_vals)
+    ]
+
+    if fit_g_vals:
+        # Plot xi_fit*g^2 vs 1/g^2, where xi_fit = -1/slope from the local log-linear fit above.
+        plt.figure()
+        plt.plot(fit_inv_g_squared_vals, fit_xi_times_gsq, marker="o", markersize=3.0, linewidth=1.0, label="xi_fit * g^2")
+        plt.xlabel("inverse coupling 1/g^2")
+        plt.ylabel("xi_fit * g^2")
+        plt.title("Slope-fit scaled correlation length")
+        plt.grid(True)
+        plt.legend(loc="best")
+        plt.tight_layout()
+        plt.savefig(fit_xi_gsq_inv_gsq_png, dpi=200)
+
+        # Plot m_fit vs g^2, where m_fit = -slope from the local log-linear fit above.
+        plt.figure()
+        plt.plot(fit_g_squared_vals, fit_mass_vals, marker="o", markersize=3.0, linewidth=1.0, label="m_fit")
+        plt.xlabel("coupling g^2")
+        plt.ylabel("m_fit")
+        plt.title("Slope-fit correlation mass")
+        plt.grid(True)
+        plt.legend(loc="best")
+        plt.tight_layout()
+        plt.savefig(fit_mass_gsq_png, dpi=200)
+
     g_vals = []
     xi_corr = []
     xi_gap = []
-    xi_transfer = []
     for g, grows in sorted(by_g.items()):
         first = grows[0]
         g_vals.append(g)
         xi_corr.append(first["xi_corr"])
         xi_gap.append(first["xi_gap"])
-        xi_transfer.append(first["xi_transfer"])
 
+    # Plot correlation lengths from CSV columns xi_corr and xi_gap = 1/gap against g^2.
     plt.figure()
     g_squared_vals = [g * g for g in g_vals]
     plt.plot(g_squared_vals, xi_corr, marker="o", markersize=3.0, linewidth=1.0, label="fit from |C(r)|")
-    if any(math.isfinite(x) for x in xi_transfer):
-        plt.plot(g_squared_vals, xi_transfer, marker="^", markersize=3.0, linewidth=1.0, label="transfer matrix")
     plt.plot(g_squared_vals, xi_gap, marker="s", markersize=3.0, linewidth=1.0, label="1/gap")
     plt.xlabel("coupling g^2")
     plt.ylabel("correlation length")
@@ -608,18 +856,15 @@ def plot_correlation_profile(out_png, csv_path):
     plt.savefig(xi_png, dpi=200)
 
     m_corr = []
-    m_transfer = []
     gap = []
     for g, grows in sorted(by_g.items()):
         first = grows[0]
         m_corr.append(first["m_corr"])
-        m_transfer.append(first["m_transfer"])
         gap.append(first["gap"])
 
+    # Plot masses from CSV columns m_corr and gap against g^2.
     plt.figure()
     plt.plot(g_squared_vals, m_corr, marker="o", markersize=3.0, linewidth=1.0, label="1/xi_corr")
-    if any(math.isfinite(x) for x in m_transfer):
-        plt.plot(g_squared_vals, m_transfer, marker="^", markersize=3.0, linewidth=1.0, label="1/xi_transfer")
     if any(math.isfinite(x) for x in gap):
         plt.plot(g_squared_vals, gap, marker="s", markersize=3.0, linewidth=1.0, label="DMRG gap")
     plt.xlabel("coupling g^2")
@@ -634,15 +879,10 @@ def plot_correlation_profile(out_png, csv_path):
         xi * g * g if math.isfinite(xi) else math.nan
         for g, xi in zip(g_vals, xi_corr)
     ]
-    xi_transfer_times_gsq = [
-        xi * g * g if math.isfinite(xi) else math.nan
-        for g, xi in zip(g_vals, xi_transfer)
-    ]
 
+    # Plot scaled CSV correlation lengths xi_corr*g^2 against g^2.
     plt.figure()
     plt.plot(g_squared_vals, xi_times_gsq, marker="o", markersize=3.0, linewidth=1.0, label="xi_corr * g^2")
-    if any(math.isfinite(x) for x in xi_transfer_times_gsq):
-        plt.plot(g_squared_vals, xi_transfer_times_gsq, marker="^", markersize=3.0, linewidth=1.0, label="xi_transfer * g^2")
     plt.xlabel("coupling g^2")
     plt.ylabel("xi_corr * g^2")
     plt.title("Scaled correlation length")
@@ -651,7 +891,34 @@ def plot_correlation_profile(out_png, csv_path):
     plt.tight_layout()
     plt.savefig(xi_gsq_png, dpi=200)
 
-    print(f"Saved {profile_png}, {log_profile_png}, {xi_png}, {mass_png}, and {xi_gsq_png}")
+    inv_g_squared_vals = [
+        1.0 / (g * g) if g != 0.0 else math.nan
+        for g in g_vals
+    ]
+
+    # Plot scaled CSV correlation lengths xi_corr*g^2 against 1/g^2.
+    plt.figure()
+    plt.plot(inv_g_squared_vals, xi_times_gsq, marker="o", markersize=3.0, linewidth=1.0, label="xi_corr * g^2")
+    plt.xlabel("inverse coupling 1/g^2")
+    plt.ylabel("xi * g^2")
+    plt.title("Scaled correlation length vs inverse coupling")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
+    plt.savefig(xi_gsq_inv_gsq_png, dpi=200)
+
+    print(f"Saved {profile_png}, {log_profile_png}, {log_profile_fit_png}, {fit_xi_gsq_inv_gsq_png}, {fit_mass_gsq_png}, {xi_png}, {mass_png}, {xi_gsq_png}, {xi_gsq_inv_gsq_png}, and {xi_gsq_inv_gsq_logy_png}")
+    # Plot scaled CSV correlation lengths xi_corr*g^2 against 1/g^2 with logarithmic y-axis.
+    plt.figure()
+    plt.plot(inv_g_squared_vals, xi_times_gsq, marker="o", markersize=3.0, linewidth=1.0, label="xi_corr * g^2")
+    plt.xlabel("inverse coupling 1/g^2")
+    plt.ylabel("xi * g^2")
+    plt.yscale("log")
+    plt.title("Scaled correlation length vs inverse coupling")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
+    plt.savefig(xi_gsq_inv_gsq_logy_png, dpi=200)
 
 
 def plot_single_curves(out_png, csv_path, mode="F"):
@@ -951,6 +1218,14 @@ def main():
 
     elif command == "energyConvergence":
         plot_energy_convergence(sys.argv[2], sys.argv[3])
+
+    elif command == "massDiff":
+        left_column = sys.argv[5] if len(sys.argv) > 5 else "m_corr"
+        right_column = sys.argv[6] if len(sys.argv) > 6 else "gap"
+        plot_mass_difference(sys.argv[2], sys.argv[3], sys.argv[4], left_column, right_column)
+
+    elif command == "mergeCorr":
+        merge_correlation_files(sys.argv[2], sys.argv[3:])
 
     elif command == "corrProfile":
         plot_correlation_profile(sys.argv[2], sys.argv[3])

@@ -18,6 +18,8 @@ void write_csv_EspectrumGap(const string& filename, const vector<double> g_vals,
 void write_csv_gapConvergence(const string& filename, const vector<double>& g_vals, const vector<int> N_vals, const vector<vector<EnergyAnalysis>>& Espectrum);
 void write_csv_opt(const string& filename, const vector<RowOpt>& rows);
 void write_csv_eps(const string& filename, const vector<RowInfid>& rows);
+void write_csv_unitary_trace(const string& filename, const vector<DBQITEUnitaryTraceRow>& rows);
+void write_csv_unitary_opt_trace(const string& filename, const vector<DBQITEUnitaryOptTraceRow>& rows);
 
 // Run python plotter (default: python3 plot.py data.csv plot.png)
 int plot_with_python_S(const string& csv_file,
@@ -57,4 +59,19 @@ int plot_Espectrum_gap(const string& csv_file,
                      const string& py_exec = "python3",
                      const string& script  = "plot.py",
                      const string& mode = "spectrumEgap");
+
+int plot_mass_difference(const string& left_csv_file,
+	                     const string& right_csv_file,
+	                     const string& out_png = "mass_difference.png",
+	                     const string& left_column = "m_corr",
+	                     const string& right_column = "gap",
+	                     const string& py_exec = "python3",
+	                     const string& script = "plot.py",
+	                     const string& mode = "massDiff");
+
+int merge_correlation_files(const string& out_csv_file,
+	                     const vector<string>& input_csv_files,
+	                     const string& py_exec = "python3",
+	                     const string& script = "plot.py",
+	                     const string& mode = "mergeCorr");
 #endif //MY_PROJECT_DATA_H

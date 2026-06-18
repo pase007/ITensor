@@ -12,6 +12,7 @@
 #include "ChainModel.h"
 #include "ChainModelMPS.h"
 #include "GetData.h"
+#include "CorrelationScan.h"
 #include <cstdio>
 #include <fstream>
 #include <iostream>
@@ -43,6 +44,8 @@ void print_usage(const char* exe) {
 	     << "  " << exe << " single-gap <g> <N> [output_dir]\n\n"
 	     << "  " << exe << " gap-range <g> <N0> <N> [output_dir]\n\n"
 	     << "  " << exe << " corr-scan <N> [comp_i comp_j] [gap]\n"
+	     << "  " << exe << " corr-range <N> <g0> <g_step> <gN> <out_file> [comp_i comp_j] [gap]\n"
+	     << "  " << exe << " corr-merge <out_file> <input_file> [input_file ...]\n"
 	     << "  " << exe << " corr-plot <N>\n\n"
 	     << "Examples:\n"
 	     << "  " << exe << " single-gap 0.7 48\n"
@@ -50,6 +53,8 @@ void print_usage(const char* exe) {
 	     << "  " << exe << " gap-range 0.7 3 20 results/raw\n"
 	     << "  " << exe << " corr-scan 50 2 2\n"
 	     << "  " << exe << " corr-scan 50 2 2 gap\n"
+	     << "  " << exe << " corr-range 260 0.45 0.05 3 correlationLengths260_g0p45_g0p55.txt 2 2\n"
+	     << "  " << exe << " corr-merge correlationLengths260.txt correlationLengths260_g0p45_g0p55.txt correlationLengths260_g0p60_g0p70.txt\n"
 	     << "  " << exe << " corr-plot 50\n";
 }
 
@@ -167,38 +172,89 @@ int main(int argc, char* argv[]){
 				const string output_dir = (argc == 5) ? argv[4] : "./Data";
 				return run_single_gap(g, N, output_dir);
 			}
-			if(mode == "gap-range") {
-				if(argc < 5 || argc > 6) {
-					print_usage(argv[0]);
-					return 2;
+				if(mode == "gap-range") {
+					if(argc < 5 || argc > 6) {
+						print_usage(argv[0]);
+						return 2;
+					}
+					const double g = stod(argv[2]);
+					const int N0 = stoi(argv[3]);
+					const int N = stoi(argv[4]);
+					const string output_dir = (argc == 6) ? argv[5] : "./Data";
+					return run_gap_range(g, N0, N, output_dir);
 				}
-				const double g = stod(argv[2]);
-				const int N0 = stoi(argv[3]);
-				const int N = stoi(argv[4]);
-				const string output_dir = (argc == 6) ? argv[5] : "./Data";
-				return run_gap_range(g, N0, N, output_dir);
-			}
-			if(mode == "corr-scan") {
-				if(argc != 3 && argc != 5 && argc != 6) {
-					print_usage(argv[0]);
-					return 2;
+				if(mode == "corr-scan") {
+					if(argc != 3 && argc != 5 && argc != 6) {
+						print_usage(argv[0]);
+						return 2;
+					}
+					const int N = stoi(argv[2]);
+					const int comp_i = (argc >= 5) ? stoi(argv[3]) : 2;
+					const int comp_j = (argc >= 5) ? stoi(argv[4]) : 2;
+					bool computeExcited = false;
+					for(int i = 5; i < argc; ++i) {
+						const string flag = argv[i];
+						if(flag == "gap") {
+							computeExcited = true;
+						} else {
+							print_usage(argv[0]);
+							return 2;
+						}
+					}
+					scanCorrelationLengthDMRG(N, comp_i, comp_j, computeExcited);
+					return 0;
 				}
-				const int N = stoi(argv[2]);
-				const int comp_i = (argc >= 5) ? stoi(argv[3]) : 2;
-				const int comp_j = (argc >= 5) ? stoi(argv[4]) : 2;
-				const bool computeExcited = (argc == 6 && string(argv[5]) == "gap");
-				scanCorrelationLengthDMRG(N, comp_i, comp_j, computeExcited);
-				return 0;
-			}
-			if(mode == "corr-plot") {
-				if(argc != 3) {
-					print_usage(argv[0]);
-					return 2;
+				if(mode == "corr-range") {
+					if(argc < 7) {
+						print_usage(argv[0]);
+						return 2;
+					}
+					const int N = stoi(argv[2]);
+					const double g0 = stod(argv[3]);
+					const double g_step = stod(argv[4]);
+					const int gN = stoi(argv[5]);
+					const string out_file = argv[6];
+					int comp_i = 2;
+					int comp_j = 2;
+					int flag_start = 7;
+					if(argc >= 9 && string(argv[7]) != "gap") {
+						comp_i = stoi(argv[7]);
+						comp_j = stoi(argv[8]);
+						flag_start = 9;
+					}
+					bool computeExcited = false;
+					for(int i = flag_start; i < argc; ++i) {
+						const string flag = argv[i];
+						if(flag == "gap") {
+							computeExcited = true;
+						} else {
+							print_usage(argv[0]);
+							return 2;
+						}
+					}
+					scanCorrelationLengthDMRGRange(N, comp_i, comp_j, g0, g_step, gN, out_file, computeExcited);
+					return 0;
 				}
-				const int N = stoi(argv[2]);
-				plotCorrelationLengthDMRG(N);
-				return 0;
-			}
+				if(mode == "corr-merge") {
+					if(argc < 4) {
+						print_usage(argv[0]);
+						return 2;
+					}
+					vector<string> input_files;
+					for(int i = 3; i < argc; ++i) {
+						input_files.push_back(argv[i]);
+					}
+					return merge_correlation_files(argv[2], input_files, "python", "plot.py");
+				}
+				if(mode == "corr-plot") {
+					if(argc != 3) {
+						print_usage(argv[0]);
+						return 2;
+					}
+					const int N = stoi(argv[2]);
+					plotCorrelationLengthDMRG(N);
+					return 0;
+				}
 
 			print_usage(argv[0]);
 			return 2;
@@ -214,12 +270,17 @@ int main(int argc, char* argv[]){
 	//scanSpectrumDMRG(4);
 	//getChainGapConvergence();
 	//scanCorrelationLengthDMRG(20, 2, 2);
-	//plot_Espectrum("ExactEnergies4.txt", "OptimumSteps.txt", "Espectrum_gscan.png", "python3", "plot.py" );
-	//scanCorrelationLengthDMRG(50, 2, 2);
-	//plotCorrelationLengthDMRG(50);
-	// Use the CLI instead, for example:
-	//   ./dbqite_itensor corr-scan 50 2 2
-	//   ./dbqite_itensor corr-plot 50
+		//plot_Espectrum("ExactEnergies4.txt", "OptimumSteps.txt", "Espectrum_gscan.png", "python3", "plot.py" );
+		//plotCorrelationLengthDMRG(110);
+		//scanCorrelationLengthDMRG(260, 2, 2);
+		//plotCorrelationLengthDMRG(260);
+		// Use the CLI instead, for example:
+		//merge_correlation_files("correlationLengths260.txt", {
+		//	"correlationLengths260_g0p45_g0p55.txt",
+		//	"correlationLengths260_g0p60_g0p70.txt"
+		//}, "python", "plot.py");
+		//plot_Espectrum_gap("gapConv3.txt", "gapConvergence2_fit.png", "python", "plot.py", "gapConvergenceFit");
+		//plot_mass_difference("correlationLengths155.txt", "gapConv3_fit_params.csv", "mass_difference155.png", "m_corr", "m", "python", "plot.py");
 
 
 
@@ -239,7 +300,7 @@ int main(int argc, char* argv[]){
 	bool DataSig2 = false;
 	bool DataChain = false;
 	bool MPS1 = false;
-	bool MPSAdaptive = false;
+	bool MPSAdaptive = true;
     bool Plot = false;
 	getData(Data1, Data2, DataSig2, DataChain, MPS1, MPSAdaptive, Plot);
 

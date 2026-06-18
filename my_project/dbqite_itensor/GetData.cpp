@@ -3,8 +3,6 @@
 //
 
 #include "GetData.h"
-#include <fstream> // ADDED correlation-length data scan
-#include <limits>  // ADDED correlation-length data scan
 
 void getData(bool Data1, bool Data2, bool DataSig2, bool DataChain, bool MPS1, bool MPSAdaptive, bool Plot) {
     if (Data1 == true){
@@ -29,10 +27,10 @@ void getData(bool Data1, bool Data2, bool DataSig2, bool DataChain, bool MPS1, b
 
 	// MPS algos
 	if (MPS1 == true) {
-		getChainMPS(0.8, 7, false);
+		getChainMPS(0.8, 20, false);
 	}
 	if (MPSAdaptive == true) {
-		getChainMPSAdaptive(0.8, 7, false);
+		getChainMPSAdaptive(0.8, 20, false);
 	}
     if (Plot == true) {
         //plot_with_python_S("data0.5D.csv", "plot.png", "python3", "plot.py");
@@ -306,7 +304,7 @@ void getChainGapConvergence() {
 		g_vals.push_back(g);
 		cout << "--------- g = " << g << " ----------" << "\n" << "----------------------------------------" << endl;
 		for (int N = N0; N <= Nval; N++) {
-			cout << "system size: N = " << N << endl;
+			cout << "system size: N = " << N << "/" << Nval << endl;
 			if (g==g0) sysN.push_back(N);
 			SigmaChainAnalysis chain(g, N, false);
 			double E0 = chain.groundEnergy();
@@ -321,150 +319,6 @@ void getChainGapConvergence() {
 		plot_Espectrum_gap(filenameGapPlot, "energyConvergence.png", "python3", "plot.py", "energyConvergence");
 	}
 }
-
-// --- ADDED correlation-length data scan ---
-void scanCorrelationLengthDMRG(int NrSites, int comp_i, int comp_j, bool computeExcited) {
-	string filename = "correlationLengths" + to_string(NrSites) + ".txt";
-	const string data_dir = "./Data/";
-	ofstream out(data_dir + filename);
-	if(!out) {
-		throw runtime_error("Could not open file for writing: " + filename);
-	}
-
-	out << setprecision(14);
-	out << "g,N,E0,E1,gap,xi_gap,xi_corr,m_corr,i0,comp_i,comp_j,r,corr,abs_corr,log_abs_corr,rMin,rMax\n";
-
-	int gN = 8;
-	double g_step = 0.05;
-	double g0 = 0.85;
-
-	int i0 = NrSites / 4;
-	int rMin = 1;
-	int rMax = NrSites/2; //std::min(NrSites - i0, NrSites / 3);
-	if(rMax < rMin) {
-		rMin = 1;
-		rMax = NrSites - i0;
-	}
-
-	for(int step = 0; step < gN; ++step) {
-		double g = g0 + step * g_step;
-		cout << "CorrLength: current g = " << g << endl;
-		cout << "  excited-state DMRG: "
-		     << (computeExcited ? "on" : "off")
-		     << endl;
-
-		SigmaChainAnalysis chain(g, NrSites, false, true, computeExcited);
-		double E0 = chain.groundEnergy();
-		double E1 = chain.excEnergy();
-		double gap = chain.gap();
-		double xi_gap = (std::isfinite(gap) && gap != 0.0)
-		              ? 1.0 / gap
-		              : std::numeric_limits<double>::quiet_NaN();
-		double xi_corr = std::numeric_limits<double>::quiet_NaN();
-
-		vector<std::pair<int,double>> profile;
-		for(int r = 1; r <= rMax; ++r) {
-			if(r == 1 || r % 2 == 0 || r == rMax) {
-				cout << "  measuring  r = " << r << "/" << rMax << " ...";
-			}
-
-			double corr = chain.connectedCorr(i0, i0 + r, comp_i, comp_j);
-			profile.push_back({r, corr});
-
-			double abs_corr = std::abs(corr);
-			double log_abs_corr = (abs_corr > 0.0)
-			                    ? std::log(abs_corr)
-			                    : std::numeric_limits<double>::quiet_NaN();
-
-			if(r == 1 || r % 2 == 0 || r == rMax) {
-				cout << "  done C(r) = " << corr << endl;
-			}
-		}
-
-		try {
-			double sx = 0.0;
-			double sy = 0.0;
-			double sxx = 0.0;
-			double sxy = 0.0;
-			int n = 0;
-
-			for(auto const& [r, corr] : profile) {
-				if(r < rMin || r > rMax) continue;
-				double abs_corr = std::abs(corr);
-				if(abs_corr <= 1E-14 || !std::isfinite(abs_corr)) continue;
-
-				double x = static_cast<double>(r);
-				double y = std::log(abs_corr);
-				sx += x;
-				sy += y;
-				sxx += x * x;
-				sxy += x * y;
-				++n;
-			}
-
-			if(n < 2) {
-				throw runtime_error("not enough nonzero data points");
-			}
-
-			double denom = n * sxx - sx * sx;
-			if(std::abs(denom) <= 1E-14) {
-				throw runtime_error("singular linear fit");
-			}
-
-			double slope = (n * sxy - sx * sy) / denom;
-			if(slope >= 0.0) {
-				throw runtime_error("fitted slope is non-negative");
-			}
-
-			xi_corr = -1.0 / slope;
-			cout << "  fitted xi_corr = " << xi_corr
-			     << ", m_corr = " << 1.0 / xi_corr
-			     << endl;
-		} catch(std::exception const& e) {
-			cout << "fitCorrelationLength failed for g = " << g << ": " << e.what() << endl;
-		}
-		double m_corr = (std::isfinite(xi_corr) && xi_corr != 0.0)
-		              ? 1.0 / xi_corr
-		              : std::numeric_limits<double>::quiet_NaN();
-
-		for(auto const& [r, corr] : profile) {
-			double abs_corr = std::abs(corr);
-			double log_abs_corr = (abs_corr > 0.0)
-			                    ? std::log(abs_corr)
-			                    : std::numeric_limits<double>::quiet_NaN();
-
-			out << g << ","
-			    << NrSites << ","
-			    << E0 << ","
-			    << E1 << ","
-			    << gap << ","
-			    << xi_gap << ","
-			    << xi_corr << ","
-			    << m_corr << ","
-			    << i0 << ","
-			    << comp_i << ","
-			    << comp_j << ","
-			    << r << ","
-			    << corr << ","
-			    << abs_corr << ","
-			    << log_abs_corr << ","
-			    << rMin << ","
-			    << rMax << "\n";
-		}
-		out.flush();
-	}
-}
-
-void scanLaplaceBeltramiCorrelationLengthDMRG(int NrSites) {
-	scanCorrelationLengthDMRG(NrSites, 0, 0);
-}
-
-void plotCorrelationLengthDMRG(int NrSites) {
-	string filename = "correlationLengths" + to_string(NrSites) + ".txt";
-	string plotname = "correlationLengths" + to_string(NrSites) + ".png";
-	plot_Espectrum_gap(filename, plotname, "python", "plot.py", "corrProfile");
-}
-// --- END ADDED correlation-length data scan ---
 
 
 
@@ -496,12 +350,12 @@ void getChainMPS(double g, int N, bool PBC) {
 
 		local_mps.basicModelLoop(loop_params2);
 	}
-    plot_with_python_E(s_step_vec_str, "Elevels6.csv", "plotMPS4.png",  "python3", "plot.py", "multiE");
+    plot_with_python_E(s_step_vec_str, "Elevels6.csv", "plotMPS20.png",  "python3", "plot.py", "multiE");
 }
 
 void getChainMPSAdaptive(double g, int N, bool PBC) {
-	vector<double> s_step_vec = {0.18, 0.26, 0.35};
-	vector<string> s_step_vec_str = {"0.18MPSopt", "0.26MPSopt", "0.35MPSopt"};
+	vector<double> s_step_vec = {0.12, 0.15, 0.18};
+	vector<string> s_step_vec_str = {"0.06MPSopt", "0.09MPSopt", "0.12MPSopt"};
 	vector<double> s_candidates = {};// {0.05, 0.08, 0.1, 0.12, 0.15, 0.18, 0.2, 0.24};
 	bool refine_s = false;
 
@@ -515,7 +369,7 @@ void getChainMPSAdaptive(double g, int N, bool PBC) {
 		AlgoLoopParams loop_params;
 		loop_params.s_step = s_step_vec[i];
 		loop_params.s_string = s_step_vec_str[i];
-		loop_params.K = 5;
+		loop_params.K = 6;
 		loop_params.infid_target = 1E-5;
 		loop_params.str_infid_target = "1E-5";
 		loop_params.s_candidates = s_candidates;
@@ -524,5 +378,5 @@ void getChainMPSAdaptive(double g, int N, bool PBC) {
 		chainMPS.adaptiveSModelLoop(loop_params);
 	}
 
-	plot_with_python_E(s_step_vec_str, "Elevels6.csv", "plotAdaptiveMPS.png",  "python3", "plot.py", "multiE");
+	plot_with_python_E(s_step_vec_str, "Elevels6.csv", "plotAdaptiveMPS20.png",  "python3", "plot.py", "multiE");
 }

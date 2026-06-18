@@ -26,7 +26,7 @@ SigmaChainAnalysis::SigmaChainAnalysis(double g, int N, bool PBC, bool quiet, bo
     buildHamiltonianMPO();
 
     // Groundstate search with DMRG
-    E0_ = groundStateDMRG(15, 250, 1E-10, quiet);
+    E0_ = groundStateDMRG(25, 250, 1E-10, quiet);
     checkGroundstateMPS();
     if(computeExcited) {
         E1_ = excStateDMRG(27, 250, 1E-10, quiet, 7.0);
@@ -291,102 +291,6 @@ double SigmaChainAnalysis::fitCorrelationLength(int i0, int comp_i, int comp_j, 
     return -1.0 / slope;
 }
 
-double SigmaChainAnalysis::transferCorrelationLength(int site, int maxTransferDim) const {
-    if(site < 0) {
-        site = NrSites_ / 2;
-    }
-    if(site <= 1 || site >= NrSites_) {
-        cout << "  transfer xi skipped: site must have left and right links" << endl;
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-
-    auto psi = groundstate_;
-    psi.position(site);
-
-    auto A = psi(site);
-    auto left = commonIndex(A, psi(site - 1));
-    auto right = commonIndex(A, psi(site + 1));
-    if(!left || !right) {
-        cout << "  transfer xi skipped: could not identify central links" << endl;
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-
-    int Dl = dim(left);
-    int Dr = dim(right);
-    if(Dl != Dr) {
-        cout << "  transfer xi skipped: left/right bond dimensions differ at site "
-             << site << " (" << Dl << " vs " << Dr << ")" << endl;
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-
-    int Dlink = Dl;
-    int transferDim = Dlink * Dlink;
-    if(transferDim > maxTransferDim) {
-        cout << "  transfer xi skipped: transfer matrix dimension "
-             << transferDim << " exceeds cap " << maxTransferDim << endl;
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-
-    auto row = Index(transferDim, "TransferRow");
-    auto col = Index(transferDim, "TransferCol");
-    ITensor T(row, col);
-    auto s = sitesVec_(site);
-
-    auto flat = [Dlink](int a, int b) {
-        return (a - 1) * Dlink + b;
-    };
-
-    for(int l1 = 1; l1 <= Dlink; ++l1)
-    for(int l2 = 1; l2 <= Dlink; ++l2)
-    for(int r1 = 1; r1 <= Dlink; ++r1)
-    for(int r2 = 1; r2 <= Dlink; ++r2) {
-        Cplx val = 0.0;
-        for(int sv = 1; sv <= dim(s); ++sv) {
-            auto a1 = eltC(A, left(l1), s(sv), right(r1));
-            auto a2 = eltC(A, left(l2), s(sv), right(r2));
-            val += a1 * std::conj(a2);
-        }
-        T.set(row(flat(r1, r2)), col(flat(l1, l2)), val);
-    }
-
-    ITensor V, Dvals;
-    eigen(T, V, Dvals);
-
-    auto dinds = inds(Dvals);
-    if(length(dinds) != 2) {
-        cout << "  transfer xi skipped: unexpected eigenvalue tensor order" << endl;
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-
-    auto d0 = dinds[0];
-    auto d1 = dinds[1];
-    vector<double> abs_lams;
-    abs_lams.reserve(dim(d0));
-    for(int n = 1; n <= dim(d0); ++n) {
-        abs_lams.push_back(std::abs(eltC(Dvals, d0(n), d1(n))));
-    }
-    std::sort(abs_lams.begin(), abs_lams.end(), std::greater<double>());
-
-    if(abs_lams.size() < 2 || abs_lams[0] <= 0.0 || abs_lams[1] <= 0.0) {
-        cout << "  transfer xi skipped: not enough nonzero eigenvalues" << endl;
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-
-    double ratio = abs_lams[1] / abs_lams[0];
-    if(ratio <= 0.0 || ratio >= 1.0) {
-        cout << "  transfer xi skipped: invalid eigenvalue ratio = " << ratio << endl;
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-
-    double xi = -1.0 / std::log(ratio);
-    cout << "  transfer xi at site " << site
-         << ": lambda0 = " << abs_lams[0]
-         << ", lambda1 = " << abs_lams[1]
-         << ", xi_transfer = " << xi
-         << ", m_transfer = " << 1.0 / xi
-         << endl;
-    return xi;
-}
 // --- END ADDED correlation-length helpers ---
 
 
@@ -396,5 +300,3 @@ double SigmaChainAnalysis::energyDensityConvergenceTest(double g, int N) const {
     vector<double> nrmE0;
     return 1.0;
 }
-
-// ----------------------------------- Correlation length from MPO contraction ---------------------------------------

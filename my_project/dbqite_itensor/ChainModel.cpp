@@ -313,12 +313,16 @@ void ChainModel::basicModelLoop(const AlgoLoopParams& params) const {
     //Data container
     vector<Row> rows;
     rows.reserve(K+1);
+    vector<DBQITEUnitaryTraceRow> unitary_rows;
+    unitary_rows.reserve(K+1);
     //cout << "k\tEnergy(<X>)\t\tInfidelity(|->)\n"; //"\t\tunitarity defect\n";
     double Var, Ek, Fk, IFk, F1k, IF1k;
 
     // Start U0 = Warm up
     ITensor U = U0_;
     ITensor psi0 = applyGate(U, p0_);
+    DBQITEUnitaryCounts unitary_counts;
+    unitary_counts.U0 = 1;
 
     // Contruct Unitaries A and R
     ITensor A  = exp_i_theta_H(H_, theta);
@@ -339,6 +343,7 @@ void ChainModel::basicModelLoop(const AlgoLoopParams& params) const {
         IFk = 1 - Fk;
         IF1k = 1 - F1k;
         rows.push_back(Row{k, Ek, Fk});
+        unitary_rows.push_back(DBQITEUnitaryTraceRow{k, IFk, unitary_counts});
 
         cout << k << "\t" << Ek << "\t" << IFk << "\t" << IF1k << "\t" << Var << "\n";
         if (IFk < infid_target) {
@@ -364,9 +369,11 @@ void ChainModel::basicModelLoop(const AlgoLoopParams& params) const {
         }else{
             U = Ui;
         }
+        unitary_counts.advanceOneDBQITEStep();
     }
     //write_csv("data4.csv", rows);
     write_csv("data" + s_string + ".csv", rows);
+    write_csv_unitary_trace("data" + s_string + "_unitaries.csv", unitary_rows);
 }
 
 void ChainModel::degradingInfidLoop(const AlgoInfidParams& params) const {
@@ -563,6 +570,7 @@ void ChainModel::optimizeStepsLoop(const AlgoOptParams& params) const {
     // Data Container
     vector<RowOpt> rows;
     rows.reserve(s_bin+1);
+    vector<DBQITEUnitaryOptTraceRow> unitary_rows;
     double Fk, IFk;
     //cout << "current s\tsteps k" << endl;
 
@@ -573,6 +581,8 @@ void ChainModel::optimizeStepsLoop(const AlgoOptParams& params) const {
 
         // Start U0 = Warm up
         ITensor U = U0_;
+        DBQITEUnitaryCounts unitary_counts;
+        unitary_counts.U0 = 1;
 
         // Contruct Unitaries A and R
         ITensor A  = exp_i_theta_H(H_, theta);
@@ -586,6 +596,7 @@ void ChainModel::optimizeStepsLoop(const AlgoOptParams& params) const {
             // Calculate Observables and save them
             Fk = fidelityToSubspace(psi, groundspace_);
             IFk = 1 - Fk;
+            unitary_rows.push_back(DBQITEUnitaryOptTraceRow{s_step, k, IFk, unitary_counts});
 
             if (IFk > infid_target) {
                 if (k<K_max) {
@@ -607,6 +618,7 @@ void ChainModel::optimizeStepsLoop(const AlgoOptParams& params) const {
                     }else{
                         U = Ui;
                     }
+                    unitary_counts.advanceOneDBQITEStep();
 
                 }else if (k == K_max) {
                     //cout << k << endl;
@@ -620,5 +632,5 @@ void ChainModel::optimizeStepsLoop(const AlgoOptParams& params) const {
         }
     }
     write_csv_opt("data" + str_infid_target + "opt.csv", rows);
+    write_csv_unitary_opt_trace("data" + str_infid_target + "opt_unitaries.csv", unitary_rows);
 }
-
